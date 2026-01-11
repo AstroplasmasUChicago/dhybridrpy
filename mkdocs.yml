@@ -1,0 +1,76 @@
+site_name: dhybridrpy
+site_description: A Python package to easily load and plot data from dHybridR simulations
+site_author: Bricker Ostler, Miha Cernetic
+site_url: https://dhybridrpy.readthedocs.io/
+
+repo_name: bwostler/dhybridrpy
+repo_url: https://github.com/bwostler/dhybridrpy
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+            show_root_heading: true
+            heading_level: 2
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: installation.md
+    - Quick Start: quickstart.md
+  - User Guide:
+    - Working with Data: user-guide/working-with-data.md
+    - Plotting: user-guide/plotting.md
+    - Lazy Loading: user-guide/lazy-loading.md
+  - API Reference:
+    - DHybridrpy: api/dhybridrpy.md
+    - Timestep: api/timestep.md
+    - Data Classes: api/data.md
+  - Examples: examples.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/bwostler/dhybridrpy
