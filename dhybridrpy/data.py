@@ -296,6 +296,140 @@ class Data(BaseProperties):
 
         return parent._create_new_instance(result_array, "", new_name, parent)
 
+    def plot_1d_avg(
+        self,
+        direction: Literal["x", "y", "z"] = "x",
+        *,
+        ax: Optional[Axes] = None,
+        dpi: int = 100,
+        title: Optional[str] = None,
+        xlabel: Optional[str] = None,
+        ylabel: Optional[str] = None,
+        xlim: Optional[tuple] = None,
+        ylim: Optional[tuple] = None,
+        fill_alpha: float = 0.3,
+        fill_color: Optional[str] = None,
+        line_color: Optional[str] = None,
+        show_std: bool = True,
+        **kwargs
+    ) -> Tuple[Axes, Line2D]:
+        """
+        Plot 1D average along a chosen direction with fill_between showing standard deviation.
+
+        Averages the data along all axes perpendicular to the specified direction,
+        then plots the mean with a shaded region representing ± one standard deviation.
+
+        Args:
+            direction: The direction along which to plot ("x", "y", or "z").
+                       The data is averaged over all other dimensions.
+            ax: Matplotlib Axes instance.
+            dpi: Resolution of the plot.
+            title: Plot title.
+            xlabel, ylabel: Axis labels.
+            xlim, ylim: Axis limits.
+            fill_alpha: Alpha (transparency) for the standard deviation fill region.
+            fill_color: Color for the fill region. Defaults to match line color.
+            line_color: Color for the mean line.
+            show_std: Whether to show the standard deviation fill region.
+            **kwargs: Additional keyword arguments for the plot function.
+
+        Returns:
+            Tuple of (Axes, Line2D) for the plot.
+        """
+        if direction not in ["x", "y", "z"]:
+            raise ValueError("Direction must be 'x', 'y', or 'z'.")
+
+        num_dimensions = len(self._get_data_shape())
+        if num_dimensions < 1:
+            raise ValueError("Data must have at least 1 dimension.")
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(8, 6), dpi=dpi)
+
+        def is_computable(arr: Union[np.ndarray, da.Array]) -> bool:
+            return self.lazy and isinstance(arr, da.Array)
+
+        data = self.data.compute() if is_computable(self.data) else self.data
+
+        # Determine which axis corresponds to the direction and compute mean/std
+        if num_dimensions == 1:
+            # For 1D data, just plot as-is (no averaging needed)
+            coord_data = self.xdata.compute() if is_computable(self.xdata) else self.xdata
+            coord_lim = self.xlimdata.compute() if is_computable(self.xlimdata) else self.xlimdata
+            mean_data = data
+            std_data = np.zeros_like(data)
+            default_xlabel = self._X
+        elif num_dimensions == 2:
+            # For 2D data: shape is (nx, ny)
+            # x -> axis 0, y -> axis 1
+            if direction == "x":
+                # Average over y (axis 1)
+                mean_data = np.mean(data, axis=1)
+                std_data = np.std(data, axis=1)
+                coord_data = self.xdata.compute() if is_computable(self.xdata) else self.xdata
+                coord_lim = self.xlimdata.compute() if is_computable(self.xlimdata) else self.xlimdata
+                default_xlabel = self._X
+            elif direction == "y":
+                # Average over x (axis 0)
+                mean_data = np.mean(data, axis=0)
+                std_data = np.std(data, axis=0)
+                coord_data = self.ydata.compute() if is_computable(self.ydata) else self.ydata
+                coord_lim = self.ylimdata.compute() if is_computable(self.ylimdata) else self.ylimdata
+                default_xlabel = self._Y
+            else:  # z
+                raise ValueError("Cannot average along 'z' for 2D data. Use 'x' or 'y'.")
+        elif num_dimensions == 3:
+            # For 3D data: shape is (nx, ny, nz)
+            # x -> axis 0, y -> axis 1, z -> axis 2
+            if direction == "x":
+                # Average over y and z (axes 1 and 2)
+                mean_data = np.mean(data, axis=(1, 2))
+                std_data = np.std(data, axis=(1, 2))
+                coord_data = self.xdata.compute() if is_computable(self.xdata) else self.xdata
+                coord_lim = self.xlimdata.compute() if is_computable(self.xlimdata) else self.xlimdata
+                default_xlabel = self._X
+            elif direction == "y":
+                # Average over x and z (axes 0 and 2)
+                mean_data = np.mean(data, axis=(0, 2))
+                std_data = np.std(data, axis=(0, 2))
+                coord_data = self.ydata.compute() if is_computable(self.ydata) else self.ydata
+                coord_lim = self.ylimdata.compute() if is_computable(self.ylimdata) else self.ylimdata
+                default_xlabel = self._Y
+            else:  # z
+                # Average over x and y (axes 0 and 1)
+                mean_data = np.mean(data, axis=(0, 1))
+                std_data = np.std(data, axis=(0, 1))
+                coord_data = self.zdata.compute() if is_computable(self.zdata) else self.zdata
+                coord_lim = self.zlimdata.compute() if is_computable(self.zlimdata) else self.zlimdata
+                default_xlabel = self._Z
+        else:
+            raise NotImplementedError("plot_1d_avg only supports 1D, 2D, or 3D data.")
+
+        # Plot the mean line
+        line = ax.plot(coord_data, mean_data, color=line_color, **kwargs)[0]
+
+        # Add fill_between for standard deviation
+        if show_std and num_dimensions > 1:
+            fc = fill_color if fill_color else line.get_color()
+            ax.fill_between(
+                coord_data,
+                mean_data - std_data,
+                mean_data + std_data,
+                alpha=fill_alpha,
+                color=fc
+            )
+
+        # Set labels and title
+        default_title = rf"{self.name} (avg along {direction}) at time {round(self.time, self._time_ndecimals)} $\omega_{{ci}}^{{-1}}$"
+        ax.set_title(title if title else default_title)
+        ax.set_xlabel(xlabel if xlabel else default_xlabel)
+        ax.set_ylabel(ylabel if ylabel else f"{self.name}")
+        ax.set_xlim(xlim if xlim else coord_lim)
+        if ylim:
+            ax.set_ylim(ylim)
+
+        return ax, line
+
     def plot(self,
         *,
         ax: Optional[Axes] = None,
