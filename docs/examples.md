@@ -334,6 +334,104 @@ plt.savefig("field_overview.png", dpi=150)
 plt.show()
 ```
 
+## 1D Averaging Analysis
+
+### Plot 1D Averages with Standard Deviation
+
+```python
+import matplotlib.pyplot as plt
+
+# Get field data
+Bx = dpy.timestep(1).fields.Bx()
+
+# Plot 1D average along x with std deviation shading
+ax, line = Bx.plot_1d_avg("x")
+plt.savefig("Bx_avg_x.png", dpi=150)
+plt.show()
+```
+
+### Compare Averages Along Different Directions
+
+```python
+import matplotlib.pyplot as plt
+
+Bx = dpy.timestep(1).fields.Bx()
+
+fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+# Average along x (shows variation in x, averaged over y)
+Bx.plot_1d_avg("x", ax=axes[0], fill_alpha=0.3, line_color="blue")
+
+# Average along y (shows variation in y, averaged over x)
+Bx.plot_1d_avg("y", ax=axes[1], fill_alpha=0.3, line_color="red")
+
+plt.tight_layout()
+plt.savefig("Bx_directional_averages.png", dpi=150)
+plt.show()
+```
+
+### Extract Averaged Data for Custom Analysis
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+
+Bx = dpy.timestep(1).fields.Bx()
+
+# Get the averaged data directly
+coords, mean, std_lower, std_upper = Bx.avg_1d("x")
+
+# Custom analysis: find where field exceeds threshold
+threshold = 0.5 * mean.max()
+exceeds = mean > threshold
+print(f"Field exceeds threshold at x = {coords[exceeds]}")
+
+# Custom plotting with more control
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.plot(coords, mean, 'b-', linewidth=2, label='Mean')
+ax.fill_between(coords, std_lower, std_upper, alpha=0.2, color='blue', label='±1σ')
+ax.axhline(threshold, color='red', linestyle='--', label='Threshold')
+ax.legend()
+ax.set_xlabel('x / $d_i$')
+ax.set_ylabel('Bx')
+plt.savefig("Bx_custom_analysis.png", dpi=150)
+plt.show()
+```
+
+### Time Evolution of 1D Profiles
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+
+fig, ax = plt.subplots(figsize=(10, 6))
+
+for ts_num in dpy.timesteps()[::2]:  # Every other timestep
+    Bx = dpy.timestep(ts_num).fields.Bx()
+    coords, mean, _, _ = Bx.avg_1d("x")
+    ax.plot(coords, mean, label=f't = {Bx.time:.2f}')
+
+ax.set_xlabel('x / $d_i$')
+ax.set_ylabel('Bx (averaged over y)')
+ax.legend()
+plt.savefig("Bx_profile_evolution.png", dpi=150)
+plt.show()
+```
+
+### Phase Space Averaging
+
+```python
+import matplotlib.pyplot as plt
+
+# Get density profile averaged along x
+phase = dpy.timestep(1).phases.x3x2x1(species=1)
+
+# Plot averaged density profile
+ax, line = phase.plot_1d_avg("x", title="Density Profile (species 1)")
+plt.savefig("density_profile.png", dpi=150)
+plt.show()
+```
+
 ## Saving Results
 
 ### Export to NumPy

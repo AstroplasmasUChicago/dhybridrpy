@@ -292,6 +292,132 @@ plt.show()
 
 ---
 
+## 1D Averaging
+
+Both `Field` and `Phase` provide methods for computing and plotting 1D averages along a chosen direction.
+
+### avg_1d Method
+
+Computes the mean and standard deviation along a specified direction, averaging over all perpendicular axes.
+
+```python
+def avg_1d(
+    self,
+    direction: Literal["x", "y", "z"] = "x",
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+```
+
+#### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `direction` | `str` | `"x"` | Direction along which to compute the average ("x", "y", or "z") |
+
+#### Returns
+
+A tuple of four numpy arrays:
+
+| Return Value | Description |
+|--------------|-------------|
+| `coords` | 1D array of coordinates along the specified direction |
+| `mean` | 1D array of mean values |
+| `std_lower` | 1D array of (mean - standard deviation) |
+| `std_upper` | 1D array of (mean + standard deviation) |
+
+#### Example
+
+```python
+Bx = dpy.timestep(1).fields.Bx()
+
+# Get averaged data for custom analysis
+coords, mean, std_lower, std_upper = Bx.avg_1d("x")
+
+# Use in your own plotting or analysis
+import matplotlib.pyplot as plt
+plt.plot(coords, mean)
+plt.fill_between(coords, std_lower, std_upper, alpha=0.3)
+plt.show()
+```
+
+### plot_1d_avg Method
+
+Plots the 1D average with a shaded region showing ±1 standard deviation.
+
+```python
+def plot_1d_avg(
+    self,
+    direction: Literal["x", "y", "z"] = "x",
+    *,
+    ax: Optional[Axes] = None,
+    dpi: int = 100,
+    title: Optional[str] = None,
+    xlabel: Optional[str] = None,
+    ylabel: Optional[str] = None,
+    xlim: Optional[tuple] = None,
+    ylim: Optional[tuple] = None,
+    fill_alpha: float = 0.3,
+    fill_color: Optional[str] = None,
+    line_color: Optional[str] = None,
+    show_std: bool = True,
+    **kwargs
+) -> Tuple[Axes, Line2D]
+```
+
+#### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `direction` | `str` | `"x"` | Direction along which to plot ("x", "y", or "z") |
+| `ax` | `Axes` | `None` | Matplotlib Axes (creates new if None) |
+| `dpi` | `int` | `100` | Figure resolution |
+| `title` | `str` | `None` | Plot title (auto-generated if None) |
+| `xlabel` | `str` | `None` | X-axis label |
+| `ylabel` | `str` | `None` | Y-axis label |
+| `xlim` | `tuple` | `None` | X-axis limits |
+| `ylim` | `tuple` | `None` | Y-axis limits |
+| `fill_alpha` | `float` | `0.3` | Transparency of the std deviation fill region |
+| `fill_color` | `str` | `None` | Color for the fill region (defaults to line color) |
+| `line_color` | `str` | `None` | Color for the mean line |
+| `show_std` | `bool` | `True` | Whether to show the standard deviation fill |
+| `**kwargs` | | | Additional matplotlib kwargs for the line plot |
+
+#### Returns
+
+- `Axes`: The matplotlib Axes object
+- `Line2D`: The line plot object
+
+#### Example
+
+```python
+import matplotlib.pyplot as plt
+
+Bx = dpy.timestep(1).fields.Bx()
+
+# Simple usage
+ax, line = Bx.plot_1d_avg("x")
+plt.show()
+
+# Customized plot
+fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+Bx.plot_1d_avg("x", ax=axes[0], fill_alpha=0.2, line_color="blue")
+Bx.plot_1d_avg("y", ax=axes[1], fill_alpha=0.2, line_color="red")
+plt.tight_layout()
+plt.savefig("Bx_averages.png")
+```
+
+#### Behavior by Dimension
+
+| Data Dimension | Direction | Averaging Axes |
+|----------------|-----------|----------------|
+| 1D | x | None (data returned as-is) |
+| 2D | x | y |
+| 2D | y | x |
+| 3D | x | y, z |
+| 3D | y | x, z |
+| 3D | z | x, y |
+
+---
+
 ## See Also
 
 - [Plotting Guide](../user-guide/plotting.md)
