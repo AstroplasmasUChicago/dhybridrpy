@@ -372,6 +372,167 @@ class Data(BaseProperties):
 
         return coord_data, mean_data, mean_data - std_data, mean_data + std_data
 
+    def fft_power(
+        self,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Compute the FFT power spectrum of the data.
+
+        Computes the power spectral density as a function of wavenumber k,
+        using the box size as the reference for wavenumber units.
+        For multi-dimensional data, returns the radially-averaged (isotropic)
+        power spectrum.
+
+        Returns:
+            Tuple of (k, power) where:
+                - k: 1D array of wavenumber values (in units of 2π/L where L is box size)
+                - power: 1D array of power spectral density at each k
+        """
+        num_dimensions = len(self._get_data_shape())
+        if num_dimensions < 1 or num_dimensions > 3:
+            raise NotImplementedError("fft_power only supports 1D, 2D, or 3D data.")
+
+        def is_computable(arr):
+            return self.lazy and isinstance(arr, da.Array)
+
+        data = self.data.compute() if is_computable(self.data) else self.data
+
+        # Get box sizes from coordinate limits
+        xlim = self.xlimdata.compute() if is_computable(self.xlimdata) else self.xlimdata
+        Lx = xlim[1] - xlim[0]
+
+        if num_dimensions == 1:
+            nx = data.shape[0]
+            # Compute FFT
+            fft_data = np.fft.fft(data)
+            power = np.abs(fft_data) ** 2 / nx
+            # Wavenumber array
+            k = np.fft.fftfreq(nx, d=Lx/nx) * 2 * np.pi
+            # Take positive frequencies only
+            pos_mask = k >= 0
+            k = k[pos_mask]
+            power = power[pos_mask]
+            # Double power for positive frequencies (except DC)
+            power[1:] *= 2
+            return k, power
+
+        elif num_dimensions == 2:
+            nx, ny = data.shape
+            ylim = self.ylimdata.compute() if is_computable(self.ylimdata) else self.ylimdata
+            Ly = ylim[1] - ylim[0]
+
+            # Compute 2D FFT
+            fft_data = np.fft.fft2(data)
+            power_2d = np.abs(fft_data) ** 2 / (nx * ny)
+
+            # Wavenumber arrays
+            kx = np.fft.fftfreq(nx, d=Lx/nx) * 2 * np.pi
+            ky = np.fft.fftfreq(ny, d=Ly/ny) * 2 * np.pi
+            KX, KY = np.meshgrid(kx, ky, indexing='ij')
+            K = np.sqrt(KX**2 + KY**2)
+
+            # Radial binning for isotropic spectrum
+            k_max = min(np.abs(kx).max(), np.abs(ky).max())
+            dk = 2 * np.pi / max(Lx, Ly)
+            k_bins = np.arange(0, k_max + dk, dk)
+            k_centers = 0.5 * (k_bins[:-1] + k_bins[1:])
+
+            power_radial = np.zeros(len(k_centers))
+            for i in range(len(k_centers)):
+                mask = (K >= k_bins[i]) & (K < k_bins[i+1])
+                if np.any(mask):
+                    power_radial[i] = np.mean(power_2d[mask])
+
+            return k_centers, power_radial
+
+        else:  # 3D
+            nx, ny, nz = data.shape
+            ylim = self.ylimdata.compute() if is_computable(self.ylimdata) else self.ylimdata
+            zlim = self.zlimdata.compute() if is_computable(self.zlimdata) else self.zlimdata
+            Ly = ylim[1] - ylim[0]
+            Lz = zlim[1] - zlim[0]
+
+            # Compute 3D FFT
+            fft_data = np.fft.fftn(data)
+            power_3d = np.abs(fft_data) ** 2 / (nx * ny * nz)
+
+            # Wavenumber arrays
+            kx = np.fft.fftfreq(nx, d=Lx/nx) * 2 * np.pi
+            ky = np.fft.fftfreq(ny, d=Ly/ny) * 2 * np.pi
+            kz = np.fft.fftfreq(nz, d=Lz/nz) * 2 * np.pi
+            KX, KY, KZ = np.meshgrid(kx, ky, kz, indexing='ij')
+            K = np.sqrt(KX**2 + KY**2 + KZ**2)
+
+            # Radial binning for isotropic spectrum
+            k_max = min(np.abs(kx).max(), np.abs(ky).max(), np.abs(kz).max())
+            dk = 2 * np.pi / max(Lx, Ly, Lz)
+            k_bins = np.arange(0, k_max + dk, dk)
+            k_centers = 0.5 * (k_bins[:-1] + k_bins[1:])
+
+            power_radial = np.zeros(len(k_centers))
+            for i in range(len(k_centers)):
+                mask = (K >= k_bins[i]) & (K < k_bins[i+1])
+                if np.any(mask):
+                    power_radial[i] = np.mean(power_3d[mask])
+
+            return k_centers, power_radial
+
+    def plot_fft_power(
+        self,
+        *,
+        ax: Optional[Axes] = None,
+        dpi: int = 100,
+        title: Optional[str] = None,
+        xlabel: Optional[str] = None,
+        ylabel: Optional[str] = None,
+        xlim: Optional[tuple] = None,
+        ylim: Optional[tuple] = None,
+        loglog: bool = True,
+        **kwargs
+    ) -> Tuple[Axes, Line2D]:
+        """
+        Plot the FFT power spectrum.
+
+        Args:
+            ax: Matplotlib Axes instance.
+            dpi: Resolution of the plot.
+            title: Plot title.
+            xlabel, ylabel: Axis labels.
+            xlim, ylim: Axis limits.
+            loglog: Whether to use log-log scale (default True).
+            **kwargs: Additional keyword arguments for the plot function.
+
+        Returns:
+            Tuple of (Axes, Line2D) for the plot.
+        """
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(8, 6), dpi=dpi)
+
+        k, power = self.fft_power()
+
+        # Filter out zero/negative values for log plot
+        if loglog:
+            valid = (k > 0) & (power > 0)
+            k_plot = k[valid]
+            power_plot = power[valid]
+            line = ax.loglog(k_plot, power_plot, **kwargs)[0]
+        else:
+            line = ax.plot(k, power, **kwargs)[0]
+
+        default_title = rf"{self.name} power spectrum at time {round(self.time, self._time_ndecimals)} $\omega_{{ci}}^{{-1}}$"
+        ax.set_title(title if title else default_title)
+        ax.set_xlabel(xlabel if xlabel else r"$k \cdot d_i$")
+        ax.set_ylabel(ylabel if ylabel else r"Power")
+
+        if xlim:
+            ax.set_xlim(xlim)
+        if ylim:
+            ax.set_ylim(ylim)
+
+        ax.grid(True, alpha=0.3)
+
+        return ax, line
+
     def plot_1d_avg(
         self,
         direction: Literal["x", "y", "z"] = "x",
