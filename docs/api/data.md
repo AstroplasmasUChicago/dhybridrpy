@@ -529,6 +529,136 @@ plt.savefig("B_power_spectra.png")
 
 ---
 
+## 1D Slice-Based FFT Power Spectrum
+
+Alternative FFT methods that compute power spectra from 1D slices along a chosen direction, providing statistics across slices.
+
+### fft_power_1d Method
+
+Computes 1D FFT power spectra along a chosen direction, returning mean and standard deviation across all slices.
+
+```python
+def fft_power_1d(
+    self,
+    direction: Literal["x", "y", "z"] = "x",
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+```
+
+#### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `direction` | `str` | `"x"` | Direction along which to compute 1D FFTs |
+
+#### Returns
+
+A tuple of four numpy arrays:
+
+| Return Value | Description |
+|--------------|-------------|
+| `k` | 1D array of wavenumber values (in units of 2π/L) |
+| `power_mean` | 1D array of mean power at each k |
+| `power_std_lower` | 1D array of (mean - std) power |
+| `power_std_upper` | 1D array of (mean + std) power |
+
+#### Example
+
+```python
+Bx = dpy.timestep(1).fields.Bx()
+
+# Get 1D power spectrum statistics along x
+k, power_mean, power_std_lower, power_std_upper = Bx.fft_power_1d("x")
+
+# Compare anisotropy between x and y directions
+k_x, mean_x, _, _ = Bx.fft_power_1d("x")
+k_y, mean_y, _, _ = Bx.fft_power_1d("y")
+
+anisotropy = mean_x / mean_y  # Ratio of power in x vs y direction
+```
+
+### plot_fft_power_1d Method
+
+Plots the 1D FFT power spectrum with standard deviation band.
+
+```python
+def plot_fft_power_1d(
+    self,
+    direction: Literal["x", "y", "z"] = "x",
+    *,
+    ax: Optional[Axes] = None,
+    dpi: int = 100,
+    title: Optional[str] = None,
+    xlabel: Optional[str] = None,
+    ylabel: Optional[str] = None,
+    xlim: Optional[tuple] = None,
+    ylim: Optional[tuple] = None,
+    loglog: bool = True,
+    fill_alpha: float = 0.3,
+    fill_color: Optional[str] = None,
+    line_color: Optional[str] = None,
+    show_std: bool = True,
+    **kwargs
+) -> Tuple[Axes, Line2D]
+```
+
+#### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `direction` | `str` | `"x"` | Direction along which to compute 1D FFTs |
+| `ax` | `Axes` | `None` | Matplotlib Axes (creates new if None) |
+| `dpi` | `int` | `100` | Figure resolution |
+| `title` | `str` | `None` | Plot title (auto-generated if None) |
+| `xlabel` | `str` | `None` | X-axis label |
+| `ylabel` | `str` | `None` | Y-axis label |
+| `xlim` | `tuple` | `None` | X-axis limits |
+| `ylim` | `tuple` | `None` | Y-axis limits |
+| `loglog` | `bool` | `True` | Whether to use log-log scale |
+| `fill_alpha` | `float` | `0.3` | Transparency of the std deviation fill region |
+| `fill_color` | `str` | `None` | Color for the fill region (defaults to line color) |
+| `line_color` | `str` | `None` | Color for the mean line |
+| `show_std` | `bool` | `True` | Whether to show the standard deviation fill |
+| `**kwargs` | | | Additional matplotlib kwargs for the line plot |
+
+#### Returns
+
+- `Axes`: The matplotlib Axes object
+- `Line2D`: The line plot object
+
+#### Example
+
+```python
+import matplotlib.pyplot as plt
+
+Bx = dpy.timestep(1).fields.Bx()
+
+# Compare power spectra along different directions
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+Bx.plot_fft_power_1d("x", ax=axes[0])
+Bx.plot_fft_power_1d("y", ax=axes[1])
+plt.tight_layout()
+plt.show()
+
+# Compare isotropic vs 1D methods
+fig, ax = plt.subplots(figsize=(10, 6))
+Bx.plot_fft_power(ax=ax, label='Isotropic (2D FFT)', linestyle='--')
+Bx.plot_fft_power_1d("x", ax=ax, label='1D FFT along x')
+Bx.plot_fft_power_1d("y", ax=ax, label='1D FFT along y')
+ax.legend()
+plt.show()
+```
+
+#### When to Use
+
+| Method | Use Case |
+|--------|----------|
+| `fft_power()` | Isotropic turbulence, radially-averaged spectrum |
+| `fft_power_1d()` | Anisotropic systems, direction-dependent analysis |
+
+The standard deviation band in `plot_fft_power_1d` shows the variation in power across different slices, which can reveal spatial inhomogeneity in the turbulence.
+
+---
+
 ## See Also
 
 - [Plotting Guide](../user-guide/plotting.md)

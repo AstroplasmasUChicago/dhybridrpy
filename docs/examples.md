@@ -539,6 +539,80 @@ plt.savefig("total_B_power.png", dpi=150)
 plt.show()
 ```
 
+## 1D Slice-Based Power Spectrum
+
+### Directional Power Spectrum with Statistics
+
+```python
+import matplotlib.pyplot as plt
+
+Bx = dpy.timestep(1).fields.Bx()
+
+# Plot 1D power spectrum along x with std deviation band
+ax, line = Bx.plot_fft_power_1d("x")
+plt.savefig("Bx_power_1d_x.png", dpi=150)
+plt.show()
+```
+
+### Compare Directions for Anisotropy
+
+```python
+import matplotlib.pyplot as plt
+
+Bx = dpy.timestep(1).fields.Bx()
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+# Compare x and y directions
+Bx.plot_fft_power_1d("x", ax=axes[0], title="Power along x")
+Bx.plot_fft_power_1d("y", ax=axes[1], title="Power along y")
+
+plt.tight_layout()
+plt.savefig("power_anisotropy.png", dpi=150)
+plt.show()
+```
+
+### Compare Isotropic vs 1D Methods
+
+```python
+import matplotlib.pyplot as plt
+
+Bx = dpy.timestep(1).fields.Bx()
+
+fig, ax = plt.subplots(figsize=(10, 6))
+
+# Isotropic (2D FFT with radial averaging)
+Bx.plot_fft_power(ax=ax, label='Isotropic (2D FFT)', linestyle='--', color='black')
+
+# 1D slice-based along each direction
+Bx.plot_fft_power_1d("x", ax=ax, label='1D along x', show_std=True)
+Bx.plot_fft_power_1d("y", ax=ax, label='1D along y', show_std=True)
+
+ax.legend()
+ax.set_title('Comparison of FFT Methods')
+plt.savefig("fft_method_comparison.png", dpi=150)
+plt.show()
+```
+
+### Extract Data for Anisotropy Analysis
+
+```python
+import numpy as np
+
+Bx = dpy.timestep(1).fields.Bx()
+
+# Get power spectra along both directions
+k_x, power_x, _, _ = Bx.fft_power_1d("x")
+k_y, power_y, _, _ = Bx.fft_power_1d("y")
+
+# Compute anisotropy ratio (assuming same k values)
+valid = (power_x > 0) & (power_y > 0)
+anisotropy = power_x[valid] / power_y[valid]
+
+print(f"Mean anisotropy (Px/Py): {np.mean(anisotropy):.2f}")
+print(f"Anisotropy > 1 means more power in x direction")
+```
+
 ## Saving Results
 
 ### Export to NumPy
