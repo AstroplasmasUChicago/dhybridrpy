@@ -418,6 +418,117 @@ plt.savefig("Bx_averages.png")
 
 ---
 
+## FFT Power Spectrum
+
+Both `Field` and `Phase` provide methods for computing and plotting FFT power spectra.
+
+### fft_power Method
+
+Computes the power spectral density as a function of wavenumber k.
+
+```python
+def fft_power(
+    self,
+) -> Tuple[np.ndarray, np.ndarray]
+```
+
+#### Returns
+
+A tuple of two numpy arrays:
+
+| Return Value | Description |
+|--------------|-------------|
+| `k` | 1D array of wavenumber values (in units of 2π/L where L is box size) |
+| `power` | 1D array of power spectral density at each k |
+
+#### Behavior by Dimension
+
+| Data Dimension | Method |
+|----------------|--------|
+| 1D | 1D FFT, positive frequencies only |
+| 2D | 2D FFT with radial averaging for isotropic spectrum |
+| 3D | 3D FFT with radial averaging for isotropic spectrum |
+
+#### Example
+
+```python
+Bx = dpy.timestep(1).fields.Bx()
+
+# Get power spectrum data
+k, power = Bx.fft_power()
+
+# Find peak wavenumber
+k_peak = k[np.argmax(power)]
+print(f"Peak power at k = {k_peak:.3f}")
+
+# Custom analysis
+import matplotlib.pyplot as plt
+plt.loglog(k, power)
+plt.axvline(k_peak, color='red', linestyle='--')
+plt.show()
+```
+
+### plot_fft_power Method
+
+Plots the FFT power spectrum.
+
+```python
+def plot_fft_power(
+    self,
+    *,
+    ax: Optional[Axes] = None,
+    dpi: int = 100,
+    title: Optional[str] = None,
+    xlabel: Optional[str] = None,
+    ylabel: Optional[str] = None,
+    xlim: Optional[tuple] = None,
+    ylim: Optional[tuple] = None,
+    loglog: bool = True,
+    **kwargs
+) -> Tuple[Axes, Line2D]
+```
+
+#### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `ax` | `Axes` | `None` | Matplotlib Axes (creates new if None) |
+| `dpi` | `int` | `100` | Figure resolution |
+| `title` | `str` | `None` | Plot title (auto-generated if None) |
+| `xlabel` | `str` | `None` | X-axis label |
+| `ylabel` | `str` | `None` | Y-axis label |
+| `xlim` | `tuple` | `None` | X-axis limits |
+| `ylim` | `tuple` | `None` | Y-axis limits |
+| `loglog` | `bool` | `True` | Whether to use log-log scale |
+| `**kwargs` | | | Additional matplotlib kwargs for the line plot |
+
+#### Returns
+
+- `Axes`: The matplotlib Axes object
+- `Line2D`: The line plot object
+
+#### Example
+
+```python
+import matplotlib.pyplot as plt
+
+Bx = dpy.timestep(1).fields.Bx()
+
+# Simple usage
+ax, line = Bx.plot_fft_power()
+plt.show()
+
+# Compare multiple fields
+fig, ax = plt.subplots(figsize=(10, 6))
+dpy.timestep(1).fields.Bx().plot_fft_power(ax=ax, label='Bx')
+dpy.timestep(1).fields.By().plot_fft_power(ax=ax, label='By')
+dpy.timestep(1).fields.Bz().plot_fft_power(ax=ax, label='Bz')
+ax.legend()
+plt.savefig("B_power_spectra.png")
+```
+
+---
+
 ## See Also
 
 - [Plotting Guide](../user-guide/plotting.md)

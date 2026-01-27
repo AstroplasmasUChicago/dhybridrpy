@@ -432,6 +432,113 @@ plt.savefig("density_profile.png", dpi=150)
 plt.show()
 ```
 
+## FFT Power Spectrum Analysis
+
+### Basic Power Spectrum
+
+```python
+import matplotlib.pyplot as plt
+
+Bx = dpy.timestep(1).fields.Bx()
+
+# Plot power spectrum (log-log by default)
+ax, line = Bx.plot_fft_power()
+plt.savefig("Bx_power_spectrum.png", dpi=150)
+plt.show()
+```
+
+### Compare Power Spectra of Multiple Fields
+
+```python
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots(figsize=(10, 6))
+
+ts = dpy.timestep(1)
+ts.fields.Bx().plot_fft_power(ax=ax, label='Bx')
+ts.fields.By().plot_fft_power(ax=ax, label='By')
+ts.fields.Bz().plot_fft_power(ax=ax, label='Bz')
+
+ax.legend()
+ax.set_title('Magnetic Field Power Spectra')
+plt.savefig("B_power_spectra.png", dpi=150)
+plt.show()
+```
+
+### Extract Power Spectrum Data for Analysis
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+
+Bx = dpy.timestep(1).fields.Bx()
+
+# Get raw power spectrum data
+k, power = Bx.fft_power()
+
+# Find dominant wavenumber
+k_peak = k[np.argmax(power)]
+print(f"Peak power at k = {k_peak:.3f} (wavelength = {2*np.pi/k_peak:.2f} d_i)")
+
+# Fit power law in inertial range
+k_fit = (k > 0.5) & (k < 2.0)
+if np.sum(k_fit) > 2:
+    coeffs = np.polyfit(np.log10(k[k_fit]), np.log10(power[k_fit]), 1)
+    slope = coeffs[0]
+    print(f"Power law slope: {slope:.2f}")
+```
+
+### Time Evolution of Power Spectrum
+
+```python
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots(figsize=(10, 6))
+
+for ts_num in dpy.timesteps()[::2]:  # Every other timestep
+    Bx = dpy.timestep(ts_num).fields.Bx()
+    k, power = Bx.fft_power()
+    valid = (k > 0) & (power > 0)
+    ax.loglog(k[valid], power[valid], label=f't = {Bx.time:.2f}', alpha=0.7)
+
+ax.set_xlabel(r'$k \cdot d_i$')
+ax.set_ylabel('Power')
+ax.legend()
+ax.set_title('Power Spectrum Evolution')
+plt.savefig("power_spectrum_evolution.png", dpi=150)
+plt.show()
+```
+
+### Total Magnetic Energy Spectrum
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+
+ts = dpy.timestep(1)
+
+# Get power spectra for each component
+k_x, power_x = ts.fields.Bx().fft_power()
+k_y, power_y = ts.fields.By().fft_power()
+k_z, power_z = ts.fields.Bz().fft_power()
+
+# Total magnetic power (assuming same k binning)
+total_power = power_x + power_y + power_z
+
+fig, ax = plt.subplots(figsize=(10, 6))
+valid = (k_x > 0) & (total_power > 0)
+ax.loglog(k_x[valid], total_power[valid], 'k-', linewidth=2, label='Total')
+ax.loglog(k_x[valid], power_x[valid], '--', alpha=0.7, label='Bx')
+ax.loglog(k_y[valid], power_y[valid], '--', alpha=0.7, label='By')
+ax.loglog(k_z[valid], power_z[valid], '--', alpha=0.7, label='Bz')
+ax.legend()
+ax.set_xlabel(r'$k \cdot d_i$')
+ax.set_ylabel('Power')
+ax.set_title('Magnetic Field Power Spectrum')
+plt.savefig("total_B_power.png", dpi=150)
+plt.show()
+```
+
 ## Saving Results
 
 ### Export to NumPy
