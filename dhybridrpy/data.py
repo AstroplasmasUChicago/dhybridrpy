@@ -541,8 +541,9 @@ class Data(BaseProperties):
         Compute 1D FFT power spectra along a chosen direction with statistics.
 
         Extracts 1D slices along the specified direction, computes FFT power
-        spectrum for each slice, then returns the mean and standard deviation
-        across all slices.
+        spectrum for each slice, then returns the geometric mean and 
+        multiplicative standard deviation across all slices. Statistics are
+        computed in log space for proper representation on log-log plots.
 
         Args:
             direction: The direction along which to compute 1D FFTs ("x", "y", or "z").
@@ -550,9 +551,9 @@ class Data(BaseProperties):
         Returns:
             Tuple of (k, power_mean, power_std_lower, power_std_upper) where:
                 - k: 1D array of wavenumber values (in units of 2π/L)
-                - power_mean: 1D array of mean power at each k
-                - power_std_lower: 1D array of (mean - std) power
-                - power_std_upper: 1D array of (mean + std) power
+                - power_mean: 1D array of geometric mean power at each k
+                - power_std_lower: 1D array of geometric mean / multiplicative std
+                - power_std_upper: 1D array of geometric mean * multiplicative std
         """
         if direction not in ["x", "y", "z"]:
             raise ValueError("Direction must be 'x', 'y', or 'z'.")
@@ -626,11 +627,20 @@ class Data(BaseProperties):
 
         power_spectra = np.array(power_spectra)
 
-        # Compute mean and std across all slices
-        power_mean = np.mean(power_spectra, axis=0)
-        power_std = np.std(power_spectra, axis=0)
+        # Compute statistics in log space for proper log-log representation
+        # Use small floor value to avoid log(0)
+        power_spectra_safe = np.maximum(power_spectra, 1e-50)
+        log_power = np.log(power_spectra_safe)
+        
+        log_mean = np.mean(log_power, axis=0)
+        log_std = np.std(log_power, axis=0)
+        
+        # Geometric mean and multiplicative std deviation
+        power_mean = np.exp(log_mean)
+        power_std_lower = np.exp(log_mean - log_std)
+        power_std_upper = np.exp(log_mean + log_std)
 
-        return k, power_mean, power_mean - power_std, power_mean + power_std
+        return k, power_mean, power_std_lower, power_std_upper
 
     def plot_fft_power_1d(
         self,
