@@ -296,6 +296,82 @@ class Data(BaseProperties):
 
         return parent._create_new_instance(result_array, "", new_name, parent)
 
+    def avg_1d(
+        self,
+        direction: Literal["x", "y", "z"] = "x",
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Compute 1D average and standard deviation along a chosen direction.
+
+        Averages the data along all axes perpendicular to the specified direction.
+
+        Args:
+            direction: The direction along which to compute the average ("x", "y", or "z").
+                       The data is averaged over all other dimensions.
+
+        Returns:
+            Tuple of (coords, mean, std_lower, std_upper) where:
+                - coords: 1D array of coordinates along the specified direction
+                - mean: 1D array of mean values
+                - std_lower: 1D array of mean - standard deviation
+                - std_upper: 1D array of mean + standard deviation
+        """
+        if direction not in ["x", "y", "z"]:
+            raise ValueError("Direction must be 'x', 'y', or 'z'.")
+
+        num_dimensions = len(self._get_data_shape())
+        if num_dimensions < 1:
+            raise ValueError("Data must have at least 1 dimension.")
+
+        def is_computable(arr: Union[np.ndarray, da.Array]) -> bool:
+            return self.lazy and isinstance(arr, da.Array)
+
+        data = self.data.compute() if is_computable(self.data) else self.data
+
+        # Determine which axis corresponds to the direction and compute mean/std
+        if num_dimensions == 1:
+            # For 1D data, just return as-is (no averaging needed)
+            coord_data = self.xdata.compute() if is_computable(self.xdata) else self.xdata
+            mean_data = data
+            std_data = np.zeros_like(data)
+        elif num_dimensions == 2:
+            # For 2D data: shape is (nx, ny)
+            # x -> axis 0, y -> axis 1
+            if direction == "x":
+                # Average over y (axis 1)
+                mean_data = np.mean(data, axis=1)
+                std_data = np.std(data, axis=1)
+                coord_data = self.xdata.compute() if is_computable(self.xdata) else self.xdata
+            elif direction == "y":
+                # Average over x (axis 0)
+                mean_data = np.mean(data, axis=0)
+                std_data = np.std(data, axis=0)
+                coord_data = self.ydata.compute() if is_computable(self.ydata) else self.ydata
+            else:  # z
+                raise ValueError("Cannot average along 'z' for 2D data. Use 'x' or 'y'.")
+        elif num_dimensions == 3:
+            # For 3D data: shape is (nx, ny, nz)
+            # x -> axis 0, y -> axis 1, z -> axis 2
+            if direction == "x":
+                # Average over y and z (axes 1 and 2)
+                mean_data = np.mean(data, axis=(1, 2))
+                std_data = np.std(data, axis=(1, 2))
+                coord_data = self.xdata.compute() if is_computable(self.xdata) else self.xdata
+            elif direction == "y":
+                # Average over x and z (axes 0 and 2)
+                mean_data = np.mean(data, axis=(0, 2))
+                std_data = np.std(data, axis=(0, 2))
+                coord_data = self.ydata.compute() if is_computable(self.ydata) else self.ydata
+            else:  # z
+                # Average over x and y (axes 0 and 1)
+                mean_data = np.mean(data, axis=(0, 1))
+                std_data = np.std(data, axis=(0, 1))
+                coord_data = self.zdata.compute() if is_computable(self.zdata) else self.zdata
+        else:
+            raise NotImplementedError("avg_1d only supports 1D, 2D, or 3D data.")
+
+        return coord_data, mean_data, mean_data - std_data, mean_data + std_data
+
     def plot_1d_avg(
         self,
         direction: Literal["x", "y", "z"] = "x",
@@ -336,74 +412,28 @@ class Data(BaseProperties):
         Returns:
             Tuple of (Axes, Line2D) for the plot.
         """
-        if direction not in ["x", "y", "z"]:
-            raise ValueError("Direction must be 'x', 'y', or 'z'.")
-
         num_dimensions = len(self._get_data_shape())
-        if num_dimensions < 1:
-            raise ValueError("Data must have at least 1 dimension.")
 
         if ax is None:
             fig, ax = plt.subplots(figsize=(8, 6), dpi=dpi)
 
+        # Get processed data
+        coord_data, mean_data, std_lower, std_upper = self.avg_1d(direction)
+
+        # Determine default xlabel based on direction
+        default_xlabel = {"x": self._X, "y": self._Y, "z": self._Z}[direction]
+
+        # Get coordinate limits
         def is_computable(arr: Union[np.ndarray, da.Array]) -> bool:
             return self.lazy and isinstance(arr, da.Array)
 
-        data = self.data.compute() if is_computable(self.data) else self.data
-
-        # Determine which axis corresponds to the direction and compute mean/std
-        if num_dimensions == 1:
-            # For 1D data, just plot as-is (no averaging needed)
-            coord_data = self.xdata.compute() if is_computable(self.xdata) else self.xdata
-            coord_lim = self.xlimdata.compute() if is_computable(self.xlimdata) else self.xlimdata
-            mean_data = data
-            std_data = np.zeros_like(data)
-            default_xlabel = self._X
-        elif num_dimensions == 2:
-            # For 2D data: shape is (nx, ny)
-            # x -> axis 0, y -> axis 1
-            if direction == "x":
-                # Average over y (axis 1)
-                mean_data = np.mean(data, axis=1)
-                std_data = np.std(data, axis=1)
-                coord_data = self.xdata.compute() if is_computable(self.xdata) else self.xdata
-                coord_lim = self.xlimdata.compute() if is_computable(self.xlimdata) else self.xlimdata
-                default_xlabel = self._X
-            elif direction == "y":
-                # Average over x (axis 0)
-                mean_data = np.mean(data, axis=0)
-                std_data = np.std(data, axis=0)
-                coord_data = self.ydata.compute() if is_computable(self.ydata) else self.ydata
-                coord_lim = self.ylimdata.compute() if is_computable(self.ylimdata) else self.ylimdata
-                default_xlabel = self._Y
-            else:  # z
-                raise ValueError("Cannot average along 'z' for 2D data. Use 'x' or 'y'.")
-        elif num_dimensions == 3:
-            # For 3D data: shape is (nx, ny, nz)
-            # x -> axis 0, y -> axis 1, z -> axis 2
-            if direction == "x":
-                # Average over y and z (axes 1 and 2)
-                mean_data = np.mean(data, axis=(1, 2))
-                std_data = np.std(data, axis=(1, 2))
-                coord_data = self.xdata.compute() if is_computable(self.xdata) else self.xdata
-                coord_lim = self.xlimdata.compute() if is_computable(self.xlimdata) else self.xlimdata
-                default_xlabel = self._X
-            elif direction == "y":
-                # Average over x and z (axes 0 and 2)
-                mean_data = np.mean(data, axis=(0, 2))
-                std_data = np.std(data, axis=(0, 2))
-                coord_data = self.ydata.compute() if is_computable(self.ydata) else self.ydata
-                coord_lim = self.ylimdata.compute() if is_computable(self.ylimdata) else self.ylimdata
-                default_xlabel = self._Y
-            else:  # z
-                # Average over x and y (axes 0 and 1)
-                mean_data = np.mean(data, axis=(0, 1))
-                std_data = np.std(data, axis=(0, 1))
-                coord_data = self.zdata.compute() if is_computable(self.zdata) else self.zdata
-                coord_lim = self.zlimdata.compute() if is_computable(self.zlimdata) else self.zlimdata
-                default_xlabel = self._Z
-        else:
-            raise NotImplementedError("plot_1d_avg only supports 1D, 2D, or 3D data.")
+        if direction == "x":
+            coord_lim = self.xlimdata
+        elif direction == "y":
+            coord_lim = self.ylimdata
+        else:  # z
+            coord_lim = self.zlimdata
+        coord_lim = coord_lim.compute() if is_computable(coord_lim) else coord_lim
 
         # Plot the mean line
         line = ax.plot(coord_data, mean_data, color=line_color, **kwargs)[0]
@@ -413,8 +443,8 @@ class Data(BaseProperties):
             fc = fill_color if fill_color else line.get_color()
             ax.fill_between(
                 coord_data,
-                mean_data - std_data,
-                mean_data + std_data,
+                std_lower,
+                std_upper,
                 alpha=fill_alpha,
                 color=fc
             )
