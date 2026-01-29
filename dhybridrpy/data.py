@@ -12,6 +12,190 @@ from matplotlib.lines import Line2D
 from typing import Tuple, Union, Optional, Literal
 from dask.delayed import delayed
 
+
+# Standalone functions for numpy arrays
+
+def fft_power_iso(
+    data: np.ndarray,
+    Lx: float,
+    Ly: float = None,
+    Lz: float = None,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Compute isotropic FFT power spectrum of a numpy array.
+
+    Args:
+        data: 1D, 2D, or 3D numpy array
+        Lx: Box size in x direction
+        Ly: Box size in y direction (required for 2D/3D)
+        Lz: Box size in z direction (required for 3D)
+
+    Returns:
+        Tuple of (k, power) where:
+            - k: 1D array of wavenumber values (in units of 2π/L)
+            - power: 1D array of power spectral density at each k
+    """
+    num_dimensions = data.ndim
+    if num_dimensions < 1 or num_dimensions > 3:
+        raise NotImplementedError("fft_power_iso only supports 1D, 2D, or 3D data.")
+
+    if num_dimensions == 1:
+        nx = data.shape[0]
+        fft_data = np.fft.fft(data)
+        power = np.abs(fft_data) ** 2 / nx
+        k = np.fft.fftfreq(nx, d=Lx/nx) * 2 * np.pi
+        pos_mask = k >= 0
+        k = k[pos_mask]
+        power = power[pos_mask]
+        power[1:] *= 2
+        return k, power
+
+    elif num_dimensions == 2:
+        if Ly is None:
+            raise ValueError("Ly required for 2D data")
+        nx, ny = data.shape
+
+        fft_data = np.fft.fft2(data)
+        power_2d = np.abs(fft_data) ** 2 / (nx * ny)
+
+        kx = np.fft.fftfreq(nx, d=Lx/nx) * 2 * np.pi
+        ky = np.fft.fftfreq(ny, d=Ly/ny) * 2 * np.pi
+        KX, KY = np.meshgrid(kx, ky, indexing='ij')
+        K = np.sqrt(KX**2 + KY**2)
+
+        k_max = min(np.abs(kx).max(), np.abs(ky).max())
+        dk = 2 * np.pi / max(Lx, Ly)
+        k_bins = np.arange(0, k_max + dk, dk)
+        k_centers = 0.5 * (k_bins[:-1] + k_bins[1:])
+
+        power_radial = np.zeros(len(k_centers))
+        for i in range(len(k_centers)):
+            mask = (K >= k_bins[i]) & (K < k_bins[i+1])
+            if np.any(mask):
+                power_radial[i] = np.mean(power_2d[mask])
+
+        return k_centers, power_radial
+
+    else:  # 3D
+        if Ly is None or Lz is None:
+            raise ValueError("Ly and Lz required for 3D data")
+        nx, ny, nz = data.shape
+
+        fft_data = np.fft.fftn(data)
+        power_3d = np.abs(fft_data) ** 2 / (nx * ny * nz)
+
+        kx = np.fft.fftfreq(nx, d=Lx/nx) * 2 * np.pi
+        ky = np.fft.fftfreq(ny, d=Ly/ny) * 2 * np.pi
+        kz = np.fft.fftfreq(nz, d=Lz/nz) * 2 * np.pi
+        KX, KY, KZ = np.meshgrid(kx, ky, kz, indexing='ij')
+        K = np.sqrt(KX**2 + KY**2 + KZ**2)
+
+        k_max = min(np.abs(kx).max(), np.abs(ky).max(), np.abs(kz).max())
+        dk = 2 * np.pi / max(Lx, Ly, Lz)
+        k_bins = np.arange(0, k_max + dk, dk)
+        k_centers = 0.5 * (k_bins[:-1] + k_bins[1:])
+
+        power_radial = np.zeros(len(k_centers))
+        for i in range(len(k_centers)):
+            mask = (K >= k_bins[i]) & (K < k_bins[i+1])
+            if np.any(mask):
+                power_radial[i] = np.mean(power_3d[mask])
+
+        return k_centers, power_radial
+
+
+def fft_power_1d_slices(
+    data: np.ndarray,
+    L: float,
+    direction: Literal["x", "y", "z"] = "x",
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Compute 1D FFT power spectra along a chosen direction with statistics.
+
+    Extracts 1D slices along the specified direction, computes FFT power
+    spectrum for each slice, then returns the geometric mean and
+    multiplicative standard deviation across all slices.
+
+    Args:
+        data: 1D, 2D, or 3D numpy array
+        L: Box size along the chosen direction
+        direction: Direction along which to compute 1D FFTs ("x", "y", or "z")
+
+    Returns:
+        Tuple of (k, power_mean, power_std_lower, power_std_upper) where:
+            - k: 1D array of wavenumber values (in units of 2π/L)
+            - power_mean: 1D array of geometric mean power at each k
+            - power_std_lower: 1D array of geometric mean / multiplicative std
+            - power_std_upper: 1D array of geometric mean × multiplicative std
+    """
+    if direction not in ["x", "y", "z"]:
+        raise ValueError("Direction must be 'x', 'y', or 'z'.")
+
+    num_dimensions = data.ndim
+    if num_dimensions < 1 or num_dimensions > 3:
+        raise NotImplementedError("fft_power_1d_slices only supports 1D, 2D, or 3D data.")
+
+    # Get grid points along the chosen direction
+    if direction == "x":
+        n = data.shape[0]
+        axis = 0
+    elif direction == "y":
+        if num_dimensions < 2:
+            raise ValueError("Cannot compute FFT along 'y' for 1D data.")
+        n = data.shape[1]
+        axis = 1
+    else:  # z
+        if num_dimensions < 3:
+            raise ValueError("Cannot compute FFT along 'z' for 1D or 2D data.")
+        n = data.shape[2]
+        axis = 2
+
+    # Wavenumber array (positive frequencies only)
+    k_full = np.fft.fftfreq(n, d=L/n) * 2 * np.pi
+    pos_mask = k_full >= 0
+    k = k_full[pos_mask]
+
+    # Extract slices
+    if num_dimensions == 1:
+        slices = [data]
+    elif num_dimensions == 2:
+        if axis == 0:
+            slices = [data[:, j] for j in range(data.shape[1])]
+        else:
+            slices = [data[i, :] for i in range(data.shape[0])]
+    else:  # 3D
+        if axis == 0:
+            slices = [data[:, j, kk] for j in range(data.shape[1]) for kk in range(data.shape[2])]
+        elif axis == 1:
+            slices = [data[i, :, kk] for i in range(data.shape[0]) for kk in range(data.shape[2])]
+        else:
+            slices = [data[i, j, :] for i in range(data.shape[0]) for j in range(data.shape[1])]
+
+    # Compute power spectrum for each slice
+    power_spectra = []
+    for slice_data in slices:
+        fft_data = np.fft.fft(slice_data)
+        power = np.abs(fft_data) ** 2 / n
+        power = power[pos_mask]
+        power[1:] *= 2
+        power_spectra.append(power)
+
+    power_spectra = np.array(power_spectra)
+
+    # Compute statistics in log space
+    power_spectra_safe = np.maximum(power_spectra, 1e-50)
+    log_power = np.log(power_spectra_safe)
+
+    log_mean = np.mean(log_power, axis=0)
+    log_std = np.std(log_power, axis=0)
+
+    power_mean = np.exp(log_mean)
+    power_std_lower = np.exp(log_mean - log_std)
+    power_std_upper = np.exp(log_mean + log_std)
+
+    return k, power_mean, power_std_lower, power_std_upper
+
+
 class BaseProperties:
     def __init__(self, file_path: str, name: str, timestep: int, time: float, lazy: bool):
         self.file_path = file_path
@@ -388,94 +572,26 @@ class Data(BaseProperties):
                 - k: 1D array of wavenumber values (in units of 2π/L where L is box size)
                 - power: 1D array of power spectral density at each k
         """
-        num_dimensions = len(self._get_data_shape())
-        if num_dimensions < 1 or num_dimensions > 3:
-            raise NotImplementedError("fft_power only supports 1D, 2D, or 3D data.")
-
         def is_computable(arr):
             return self.lazy and isinstance(arr, da.Array)
 
         data = self.data.compute() if is_computable(self.data) else self.data
+        num_dimensions = data.ndim
 
         # Get box sizes from coordinate limits
         xlim = self.xlimdata.compute() if is_computable(self.xlimdata) else self.xlimdata
         Lx = xlim[1] - xlim[0]
 
-        if num_dimensions == 1:
-            nx = data.shape[0]
-            # Compute FFT
-            fft_data = np.fft.fft(data)
-            power = np.abs(fft_data) ** 2 / nx
-            # Wavenumber array
-            k = np.fft.fftfreq(nx, d=Lx/nx) * 2 * np.pi
-            # Take positive frequencies only
-            pos_mask = k >= 0
-            k = k[pos_mask]
-            power = power[pos_mask]
-            # Double power for positive frequencies (except DC)
-            power[1:] *= 2
-            return k, power
-
-        elif num_dimensions == 2:
-            nx, ny = data.shape
+        Ly = None
+        Lz = None
+        if num_dimensions >= 2:
             ylim = self.ylimdata.compute() if is_computable(self.ylimdata) else self.ylimdata
             Ly = ylim[1] - ylim[0]
-
-            # Compute 2D FFT
-            fft_data = np.fft.fft2(data)
-            power_2d = np.abs(fft_data) ** 2 / (nx * ny)
-
-            # Wavenumber arrays
-            kx = np.fft.fftfreq(nx, d=Lx/nx) * 2 * np.pi
-            ky = np.fft.fftfreq(ny, d=Ly/ny) * 2 * np.pi
-            KX, KY = np.meshgrid(kx, ky, indexing='ij')
-            K = np.sqrt(KX**2 + KY**2)
-
-            # Radial binning for isotropic spectrum
-            k_max = min(np.abs(kx).max(), np.abs(ky).max())
-            dk = 2 * np.pi / max(Lx, Ly)
-            k_bins = np.arange(0, k_max + dk, dk)
-            k_centers = 0.5 * (k_bins[:-1] + k_bins[1:])
-
-            power_radial = np.zeros(len(k_centers))
-            for i in range(len(k_centers)):
-                mask = (K >= k_bins[i]) & (K < k_bins[i+1])
-                if np.any(mask):
-                    power_radial[i] = np.mean(power_2d[mask])
-
-            return k_centers, power_radial
-
-        else:  # 3D
-            nx, ny, nz = data.shape
-            ylim = self.ylimdata.compute() if is_computable(self.ylimdata) else self.ylimdata
+        if num_dimensions >= 3:
             zlim = self.zlimdata.compute() if is_computable(self.zlimdata) else self.zlimdata
-            Ly = ylim[1] - ylim[0]
             Lz = zlim[1] - zlim[0]
 
-            # Compute 3D FFT
-            fft_data = np.fft.fftn(data)
-            power_3d = np.abs(fft_data) ** 2 / (nx * ny * nz)
-
-            # Wavenumber arrays
-            kx = np.fft.fftfreq(nx, d=Lx/nx) * 2 * np.pi
-            ky = np.fft.fftfreq(ny, d=Ly/ny) * 2 * np.pi
-            kz = np.fft.fftfreq(nz, d=Lz/nz) * 2 * np.pi
-            KX, KY, KZ = np.meshgrid(kx, ky, kz, indexing='ij')
-            K = np.sqrt(KX**2 + KY**2 + KZ**2)
-
-            # Radial binning for isotropic spectrum
-            k_max = min(np.abs(kx).max(), np.abs(ky).max(), np.abs(kz).max())
-            dk = 2 * np.pi / max(Lx, Ly, Lz)
-            k_bins = np.arange(0, k_max + dk, dk)
-            k_centers = 0.5 * (k_bins[:-1] + k_bins[1:])
-
-            power_radial = np.zeros(len(k_centers))
-            for i in range(len(k_centers)):
-                mask = (K >= k_bins[i]) & (K < k_bins[i+1])
-                if np.any(mask):
-                    power_radial[i] = np.mean(power_3d[mask])
-
-            return k_centers, power_radial
+        return fft_power_iso(data, Lx, Ly, Lz)
 
     def plot_fft_power(
         self,
@@ -555,92 +671,21 @@ class Data(BaseProperties):
                 - power_std_lower: 1D array of geometric mean / multiplicative std
                 - power_std_upper: 1D array of geometric mean * multiplicative std
         """
-        if direction not in ["x", "y", "z"]:
-            raise ValueError("Direction must be 'x', 'y', or 'z'.")
-
-        num_dimensions = len(self._get_data_shape())
-        if num_dimensions < 1 or num_dimensions > 3:
-            raise NotImplementedError("fft_power_1d only supports 1D, 2D, or 3D data.")
-
         def is_computable(arr):
             return self.lazy and isinstance(arr, da.Array)
 
         data = self.data.compute() if is_computable(self.data) else self.data
 
-        # Get box size and grid points along the chosen direction
+        # Get box size along the chosen direction
         if direction == "x":
             lim = self.xlimdata.compute() if is_computable(self.xlimdata) else self.xlimdata
-            L = lim[1] - lim[0]
-            n = data.shape[0]
-            axis = 0
         elif direction == "y":
-            if num_dimensions < 2:
-                raise ValueError("Cannot compute FFT along 'y' for 1D data.")
             lim = self.ylimdata.compute() if is_computable(self.ylimdata) else self.ylimdata
-            L = lim[1] - lim[0]
-            n = data.shape[1]
-            axis = 1
         else:  # z
-            if num_dimensions < 3:
-                raise ValueError("Cannot compute FFT along 'z' for 1D or 2D data.")
             lim = self.zlimdata.compute() if is_computable(self.zlimdata) else self.zlimdata
-            L = lim[1] - lim[0]
-            n = data.shape[2]
-            axis = 2
+        L = lim[1] - lim[0]
 
-        # Wavenumber array (positive frequencies only)
-        k_full = np.fft.fftfreq(n, d=L/n) * 2 * np.pi
-        pos_mask = k_full >= 0
-        k = k_full[pos_mask]
-
-        # Reshape data to iterate over slices
-        if num_dimensions == 1:
-            # Only one slice for 1D data
-            slices = [data]
-        elif num_dimensions == 2:
-            if axis == 0:
-                # Slices along x for each y
-                slices = [data[:, j] for j in range(data.shape[1])]
-            else:  # axis == 1
-                # Slices along y for each x
-                slices = [data[i, :] for i in range(data.shape[0])]
-        else:  # 3D
-            if axis == 0:
-                # Slices along x for each (y, z)
-                slices = [data[:, j, k] for j in range(data.shape[1]) for k in range(data.shape[2])]
-            elif axis == 1:
-                # Slices along y for each (x, z)
-                slices = [data[i, :, k] for i in range(data.shape[0]) for k in range(data.shape[2])]
-            else:  # axis == 2
-                # Slices along z for each (x, y)
-                slices = [data[i, j, :] for i in range(data.shape[0]) for j in range(data.shape[1])]
-
-        # Compute power spectrum for each slice
-        power_spectra = []
-        for slice_data in slices:
-            fft_data = np.fft.fft(slice_data)
-            power = np.abs(fft_data) ** 2 / n
-            power = power[pos_mask]
-            # Double power for positive frequencies (except DC)
-            power[1:] *= 2
-            power_spectra.append(power)
-
-        power_spectra = np.array(power_spectra)
-
-        # Compute statistics in log space for proper log-log representation
-        # Use small floor value to avoid log(0)
-        power_spectra_safe = np.maximum(power_spectra, 1e-50)
-        log_power = np.log(power_spectra_safe)
-        
-        log_mean = np.mean(log_power, axis=0)
-        log_std = np.std(log_power, axis=0)
-        
-        # Geometric mean and multiplicative std deviation
-        power_mean = np.exp(log_mean)
-        power_std_lower = np.exp(log_mean - log_std)
-        power_std_upper = np.exp(log_mean + log_std)
-
-        return k, power_mean, power_std_lower, power_std_upper
+        return fft_power_1d_slices(data, L, direction)
 
     def plot_fft_power_1d(
         self,
