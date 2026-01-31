@@ -8,6 +8,7 @@ import math
 
 from .containers import Timestep
 from .data import Field, Phase, Raw
+from .tracks import Track, TrackCollection
 from f90nml import Namelist
 
 logging.basicConfig(level=logging.INFO)
@@ -102,10 +103,12 @@ class DHybridrpy:
         self._PHASE_NAMES = set()
         self._timesteps_dict = {}
         self._sorted_timesteps = None
+        self._track_collections: dict = {}  # {species: TrackCollection}
         self._validate_paths()
         self.inputs = InputFileParser(input_file).input_dict
         self._get_time_inputs()
         self._traverse_directory()
+        self._discover_tracks()
 
     def _get_time_inputs(self) -> None:
         try:
@@ -227,3 +230,72 @@ class DHybridrpy:
         if self.exclude_timestep_zero and len(self._sorted_timesteps) > 0 and self._sorted_timesteps[0] == 0:
             return self._sorted_timesteps[1:]
         return self._sorted_timesteps
+
+    def _discover_tracks(self) -> None:
+        """Discover track files in the output folder."""
+        tracks_folder = os.path.join(self.output_folder, "Tracks")
+        if not os.path.isdir(tracks_folder):
+            return
+        
+        species_pattern = re.compile(r'Sp(\d+)')
+        track_file_pattern = re.compile(r'track_Sp(\d+)\.h5$')
+        
+        for species_folder in os.listdir(tracks_folder):
+            species_match = species_pattern.match(species_folder)
+            if not species_match:
+                continue
+            
+            species = int(species_match.group(1))
+            species_path = os.path.join(tracks_folder, species_folder)
+            
+            if not os.path.isdir(species_path):
+                continue
+            
+            for filename in os.listdir(species_path):
+                file_match = track_file_pattern.match(filename)
+                if file_match:
+                    file_path = os.path.join(species_path, filename)
+                    self._track_collections[species] = TrackCollection(
+                        file_path=file_path,
+                        species=species,
+                        lazy=self.lazy
+                    )
+
+    def track(self, track_id: str, species: int = 1) -> Track:
+        """
+        Access a particle track by its ID.
+
+        Args:
+            track_id: The track ID in format 'rank-tag' (e.g., '0-1465').
+            species: The species number (default: 1).
+
+        Returns:
+            The corresponding Track object.
+        """
+        if species not in self._track_collections:
+            available = list(self._track_collections.keys())
+            if not available:
+                raise ValueError("No track data found in output folder.")
+            raise ValueError(
+                f"No tracks found for species {species}."
+            )
+        return self._track_collections[species][track_id]
+
+    def tracks(self, species: int = 1) -> np.ndarray:
+        """
+        Retrieve an array of track IDs for a given species.
+
+        Args:
+            species: The species number (default: 1).
+
+        Returns:
+            Array of track IDs.
+        """
+        if species not in self._track_collections:
+            available = list(self._track_collections.keys())
+            if not available:
+                raise ValueError("No track data found in output folder.")
+            raise ValueError(
+                f"No tracks found for species {species}."
+            )
+        return self._track_collections[species].track_ids

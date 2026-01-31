@@ -17,29 +17,29 @@
 !---------- node configuration -------------------------------------------------
 node_conf
 {
-	node_number(1:2)=1,1,			  ! num of processes in each dimension
+	node_number(1:2)=1,1			  ! num of processes in each dimension
 }
 
 !---------- time ---------------------------------------------------------------
 time
 {
-	dt=0.0025,     ! time step
+	dt=0.000883883,     ! time step
 	niter=128,  ! number of iterations
 
 	t0=0.,		! initial time
 	stiter=0,   ! starting iteration number	
-    c=200.,     ! speed of light
+    c=100.,     ! speed of light
 }
 
 !---------- grid and space -----------------------------------------------------
 grid_space
 {
-	ncells(1:2)=128,128,	! Grid size in number of cells in each dimension
+	ncells(1:2)=128,64,	! Grid size in number of cells in each dimension
 	
-	boxsize(1:2)=64.,64.,	! Simulation box size in normalized units
+	boxsize(1:2)=64.,32.,	! Simulation box size in normalized units
 
-	bdtype="reflect","open","per","per", !xl, xr, yl, yr, zl, zr
-	Te=1.,
+	bdtype="per","per","per","per", !xl, xr, yl, yr, zl, zr
+	K=1.,
 	gamma=1.67,
 }
 
@@ -68,10 +68,10 @@ restart
 !----------external electromagnetic field---------------------------------------
 ext_emf
 {
-	Bx="0.",
-	By="0.05",
-	Bz="0.",
-	Ex=".1",
+	Bx="0.6",
+	By="0.33",
+	Bz="-.25",
+	Ex="0.",
 	Ey="0.",
 	Ez="0.",
 
@@ -149,20 +149,16 @@ species
 	spare_size=.1,		 			! % (0 to 1) of unused space in part vector
 	
 	ir=1,							! ionization ratio
-	rqm=1.,							! charge to mass ratio (inverse)
+	mass_to_charge_ratio=1.,		! charge to mass ratio (inverse)
 
-	vdrift(1:3)=-30.,0.,0., 			! drift velocitty
+	vdrift(1:3)=0.,0.,0., 			! drift velocitty
 	vth=1.,		 		  			! Thermal velocity
 
-	kin_push=.true.,				! true -> kinetic push, false -> MHD
-
-	ion_t=8.0,						! Ionization time
-
-    ! Species velocity (if defined, ignore vdrift)
+    ! Species velocity (if defined, ignore pdrift)
         
-    ! vsp(1:3)="","","",	
+    ! psp(1:3)="","","",	
 
-	! velocity autoconsistent with gravity (Fc=Fg) (if defined ignore all others except vth)
+	! velocity autoconsistent with gravity (Fc=Fg) (if defined ignore all others except pth)
 
 	! match_velocity_to_gravity=.false. ! if true, override previous velocity
 	! vnorm(1:3)=1.,1.,1.,				! velocity direction  = vnorm x radius
@@ -193,41 +189,42 @@ boundary_conditions
 {
 	! bdtype - per, therm, reflect, open (for each wall)
 
-	bdtype="reflect","open","per","per", !xl, xr, yl, yr, zl, zr
+	bdtype="per","per","per","per", !xl, xr, yl, yr, zl, zr
 	
-	vth=0.,		! for thermal bath - ignored for others
+!	vth=0.,		! for thermal bath - ignored for others
 	
 }
 
 !----------Plasma injector for species 1----------------------------------------
 ! (up to 10 injectors supported. if not specified, assume none)
 ! plasma injector uses density distribution info from species
-plasma_injector
-{
+! plasma_injector
+! {
 	
-	sttime=0.,			  ! start time of injection (def. 0.)
-!	endtime=10.,		  ! end time of injection (default max sim time)
-	plane="yz",			  ! plane to inject particles from (xy, yz or xz)
-	planepos=64.,		  ! position of the injector plane
-	boundary=0.,64., ! boundary of the injection plane st, st, end, end
+! 	sttime=0.,			  ! start time of injection (def. 0.)
+! !	endtime=10.,		  ! end time of injection (default max sim time)
+! 	plane="yz",			  ! plane to inject particles from (xy, yz or xz)
+! 	planepos=64.,		  ! position of the injector plane
+! 	boundary=0.,64., ! boundary of the injection plane st, st, end, end
 
-	num_par(1:2)=8,8,	  ! number of particles per cell to inject
+! 	num_par(1:3)=2,2,2,	  ! number of particles per cell to inject
 
-	vdrift(1:3)=-30.,0.,0., ! drift velocity (must be /= 0)
-	vth=1.,				  ! if not specified then = spec vth
-	inj_dens=1.0, 		  ! density, if not specified use species info
-	nodrift=.false.,	  ! zero drift velocity after injecting particles? default=false
+! 	vdrift(1:3)=-3.,0.,0., ! drift velocity (must be /= 0)
+! 	vth=1.,				  ! if not specified then = spec pth
+! 	inj_dens=1.0, 		  ! density, if not specified use species info
+! 	nodrift=.false.,	  ! zero drift velocity after injecting particles? default=false
 	
-}
+! }
 
 !----------diagnostic for species 1---------------------------------------------
 diag_species 
 {
-	dmp_vfld(1:2)= .true., .true.,
+	dmp_vfld(1:2)= .true., .true.
+	dmp_pfld(1:2)= .true., .true.
 
 	! phase spaces - defined by name, if not present then none
 
-	phasespaces="x3x2x1", "p1x1","Etx1","p2x1","p3x1",
+	phasespaces="x3x2x1","x2x1","p2p1","p3p1","p3p2","p1x1","p2x2","p1x2","p2x1","p3x1","p3x2","ptx1", "ptx2","etx1","etx2"
 	pres(1:3)=512,512,512,		! resolution for p space (defaults to 512)
 	xres(1:2)=256,256,
 }
@@ -237,7 +234,7 @@ raw_diag
 {
 	raw_dump=.true.,				! this turns on or off raw dumps
 
-	raw_ndump=128,				! number of iterations between raw dumps
+	raw_ndump=32,				! number of iterations between raw dumps
 
 !	raw_volume(1:6)=10,112,112,20,272,272,	! if not defined, then all all the box
 !											! defined -> st point, end point
@@ -256,29 +253,14 @@ raw_diag
 !----------track diagnostic for species 1-----------------------------------------
 track_diag 
 {
-	track_dump=.false.,			! this turns on or off track dumps (if on, follow=true)
+	track_dump=.true.,		! this turns on or off track dumps (if on, follow=true)
 	
 	track_fields=.true., 		! if these are on, track fields in particle positions
 
-	track_ndump=1000,			! number of iterations between track dumps
+	track_ndump=32,		! number of iterations between track dumps
 	
-	track_nstore=5,				! values are stored every iteration if =1, every other iter if =2, etc
+	track_nstore=1,		! values are stored every iteration if =1, every other iter if =2, etc
 
-	track_info_file="./input/H+.tags" ! track information (particle tags to track)
+	track_info_file="./input/tags-2d" ! track information (particle tags to track)
 	
-}
-
-!----------diagnostic for all species-------------------------------------------
-diag_species_total 
-{
-	dmp_vfld(1:2)= .false., .false.,
-
-	! phase spaces - defined by name, if not present then none
-
-!	phasespaces="x3x2x1","x2x1","x3x1","x3x2","p2p1","p3p1","p3p2",
-!				"p1x1","p2x2","p3x3","p2x1","p3x1","p1x2","p3x2","p1x3","p2x3",
-!				"ptx1","ptx2","ptx3" 
-
-	pres(1:3)=512,512,512		! resolution for p space (defaults to 512)
-
 }
