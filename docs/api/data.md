@@ -658,11 +658,3 @@ plt.show()
 | `fft_power_1d()` | Anisotropic systems, direction-dependent analysis |
 
 The standard deviation band in `plot_fft_power_1d` shows the variation in power across different slices, which can reveal spatial inhomogeneity in the turbulence.
-
----
-
-## See Also
-
-- [Plotting Guide](../user-guide/plotting.md)
-- [Lazy Loading Guide](../user-guide/lazy-loading.md)
-- [Working with Data](../user-guide/working-with-data.md)

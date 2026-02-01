@@ -18,7 +18,7 @@ pip install dhybridrpy
 To install the latest development version from GitHub:
 
 ```bash
-git clone https://github.com/bwostler/dhybridrpy.git
+git clone https://github.com/AstroplasmasUChicago/dhybridrpy.git
 cd dhybridrpy
 pip install -e .
 ```

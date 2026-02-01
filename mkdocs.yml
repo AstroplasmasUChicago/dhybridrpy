@@ -3,8 +3,8 @@ site_description: A Python package to easily load and plot data from dHybridR si
 site_author: Bricker Ostler, Miha Cernetic
 site_url: https://dhybridrpy.readthedocs.io/
 
-repo_name: bwostler/dhybridrpy
-repo_url: https://github.com/bwostler/dhybridrpy
+repo_name: AstroplasmasUChicago/dhybridrpy
+repo_url: https://github.com/AstroplasmasUChicago/dhybridrpy
 
 theme:
   name: material
@@ -62,15 +62,17 @@ nav:
     - Quick Start: quickstart.md
   - User Guide:
     - Working with Data: user-guide/working-with-data.md
+    - Particle Tracks: user-guide/particle-tracks.md
     - Plotting: user-guide/plotting.md
     - Lazy Loading: user-guide/lazy-loading.md
   - API Reference:
     - DHybridrpy: api/dhybridrpy.md
     - Timestep: api/timestep.md
     - Data Classes: api/data.md
+    - Tracks: api/tracks.md
   - Examples: examples.md
 
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/bwostler/dhybridrpy
+      link: https://github.com/AstroplasmasUChicago/dhybridrpy

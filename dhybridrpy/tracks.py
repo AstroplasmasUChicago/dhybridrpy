@@ -159,12 +159,3 @@ class TrackCollection:
                 lazy=self.lazy
             )
         return self._tracks[track_id]
-
-    def __iter__(self):
-        """Iterate over all tracks in the collection."""
-        for track_id in self.track_ids:
-            yield self[track_id]
-
-    def __len__(self) -> int:
-        """Return the number of tracks in the collection."""
-        return len(self.track_ids)

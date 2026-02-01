@@ -17,7 +17,7 @@ dependencies = [
 license = {file = "LICENSE.txt"}
 
 [project.urls]
-Homepage = "https://github.com/bwostler/dhybridrpy"
+Homepage = "https://github.com/AstroplasmasUChicago/dhybridrpy"
 
 [build-system]
 requires = ["setuptools>=42", "wheel"]

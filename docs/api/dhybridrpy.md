@@ -116,7 +116,6 @@ print(dpy.inputs.keys())
 
 # Access specific parameters
 dt = dpy.inputs['time']['dt']
-nx = dpy.inputs['grid']['nx']
 
 # Access pre-extracted time parameters
 print(f"dt = {dpy.dt}")
@@ -126,10 +125,10 @@ print(f"t0 = {dpy.start_time}")
 ### Iterating Over Timesteps
 
 ```python
-for ts_num in dpy.timesteps():
-    ts = dpy.timestep(ts_num)
+for ts in dpy.timesteps():
+    ts = dpy.timestep(ts)
     Bx = ts.fields.Bx()
-    print(f"Timestep {ts_num}: Bx max = {Bx.data.max()}")
+    print(f"Timestep {ts}: Bx max = {Bx.data.max()}")
 ```
 
 ### With Lazy Loading
@@ -146,9 +145,3 @@ Bx = dpy.timestep(1).fields.Bx()
 print(Bx.data)  # Dask array (not computed)
 print(Bx.data.compute())  # NumPy array (computed)
 ```
-
-## See Also
-
-- [Timestep](timestep.md) - Timestep container class
-- [Data Classes](data.md) - Field, Phase, and Raw classes
-- [Lazy Loading Guide](../user-guide/lazy-loading.md)

@@ -305,23 +305,3 @@ class DHybridrpy:
                 f"No tracks found for species {species}. Tracks exist for species: {tracks_exist}"
             )
         return self._track_collections[species].track_ids
-
-    def all_tracks(self, species: int = 1) -> TrackCollection:
-        """
-        Access the full track collection for a given species. This allows iteration over all tracks and bulk operations.
-
-        Args:
-            species: The species number (default: 1).
-
-        Returns:
-            The TrackCollection for the specified species.
-        """
-
-        if species not in self._track_collections:
-            tracks_exist = list(self._track_collections.keys())
-            if not tracks_exist:
-                raise ValueError("No track data found in output folder.")
-            raise ValueError(
-                f"No tracks found for species {species}. Tracks exist for species: {tracks_exist}"
-            )
-        return self._track_collections[species]
