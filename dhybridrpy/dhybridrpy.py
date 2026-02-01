@@ -211,12 +211,14 @@ class DHybridrpy:
 
     def timestep(self, ts: int) -> Timestep:
         """Access field, phase, and raw file information at a given timestep."""
+
         if ts in self._timesteps_dict:
             return self._timesteps_dict[ts]
         raise ValueError(f"Timestep {ts} not found.")
 
     def timestep_index(self, index: int) -> Timestep:
         """Access field, phase, and raw file information at a given timestep index."""
+
         timesteps = self.timesteps()
         num_timesteps = len(timesteps)
         if -num_timesteps <= index < num_timesteps:
@@ -225,6 +227,7 @@ class DHybridrpy:
 
     def timesteps(self) -> np.ndarray:
         """Retrieve an array of the timesteps."""
+
         if self._sorted_timesteps is None:
             self._sorted_timesteps = np.sort(list(self._timesteps_dict))
         if self.exclude_timestep_zero and len(self._sorted_timesteps) > 0 and self._sorted_timesteps[0] == 0:
@@ -233,6 +236,7 @@ class DHybridrpy:
 
     def _discover_tracks(self) -> None:
         """Discover track files in the output folder."""
+
         tracks_folder = os.path.join(self.output_folder, "Tracks")
         if not os.path.isdir(tracks_folder):
             return
@@ -272,12 +276,13 @@ class DHybridrpy:
         Returns:
             The corresponding Track object.
         """
+
         if species not in self._track_collections:
-            available = list(self._track_collections.keys())
-            if not available:
+            tracks_exist = list(self._track_collections.keys())
+            if not tracks_exist:
                 raise ValueError("No track data found in output folder.")
             raise ValueError(
-                f"No tracks found for species {species}."
+                f"No tracks found for species {species}. Tracks exist for species: {tracks_exist}"
             )
         return self._track_collections[species][track_id]
 
@@ -291,11 +296,32 @@ class DHybridrpy:
         Returns:
             Array of track IDs.
         """
+
         if species not in self._track_collections:
-            available = list(self._track_collections.keys())
-            if not available:
+            tracks_exist = list(self._track_collections.keys())
+            if not tracks_exist:
                 raise ValueError("No track data found in output folder.")
             raise ValueError(
-                f"No tracks found for species {species}."
+                f"No tracks found for species {species}. Tracks exist for species: {tracks_exist}"
             )
         return self._track_collections[species].track_ids
+
+    def all_tracks(self, species: int = 1) -> TrackCollection:
+        """
+        Access the full track collection for a given species. This allows iteration over all tracks and bulk operations.
+
+        Args:
+            species: The species number (default: 1).
+
+        Returns:
+            The TrackCollection for the specified species.
+        """
+
+        if species not in self._track_collections:
+            tracks_exist = list(self._track_collections.keys())
+            if not tracks_exist:
+                raise ValueError("No track data found in output folder.")
+            raise ValueError(
+                f"No tracks found for species {species}. Tracks exist for species: {tracks_exist}"
+            )
+        return self._track_collections[species]
