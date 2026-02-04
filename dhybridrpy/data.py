@@ -18,8 +18,8 @@ from dask.delayed import delayed
 def fft_power_iso(
     data: np.ndarray,
     Lx: float,
-    Ly: float = None,
-    Lz: float = None,
+    Ly: Optional[float] = None,
+    Lz: Optional[float] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Compute isotropic FFT power spectrum of a numpy array.
@@ -41,67 +41,101 @@ def fft_power_iso(
 
     if num_dimensions == 1:
         nx = data.shape[0]
+        dx = Lx / nx
+
         fft_data = np.fft.fft(data)
-        power = np.abs(fft_data) ** 2 / nx
-        k = np.fft.fftfreq(nx, d=Lx/nx) * 2 * np.pi
-        pos_mask = k >= 0
-        k = k[pos_mask]
-        power = power[pos_mask]
-        power[1:] *= 2
-        return k, power
+        power = np.abs(fft_data) ** 2 / nx * dx
+
+        k = np.fft.fftfreq(nx, d=dx) * 2 * np.pi
+
+        # Define bins (matching 2D approach)
+        k_max = np.abs(k).max()
+        dk = 2 * np.pi / Lx
+        k_bins = np.arange(0, k_max + dk, dk)
+        k_centers = 0.5 * (k_bins[:-1] + k_bins[1:])
+
+        # Bin the spectrum
+        binned_power, _ = np.histogram(np.abs(k), bins=k_bins, weights=power)
+
+        return k_centers, binned_power
 
     elif num_dimensions == 2:
         if Ly is None:
             raise ValueError("Ly required for 2D data")
         nx, ny = data.shape
 
-        fft_data = np.fft.fft2(data)
-        power_2d = np.abs(fft_data) ** 2 / (nx * ny)
+        dx = Lx / nx
+        dy = Ly / ny
 
-        kx = np.fft.fftfreq(nx, d=Lx/nx) * 2 * np.pi
-        ky = np.fft.fftfreq(ny, d=Ly/ny) * 2 * np.pi
-        KX, KY = np.meshgrid(kx, ky, indexing='ij')
+        # Compute FFT with proper normalization
+        # Parseval normalization + physical units
+        fft_data = np.fft.fft2(data)
+        power_2d = np.abs(fft_data) ** 2 / (nx * ny) * dx * dy
+
+        # Grid
+        kx = np.fft.fftfreq(nx, d=dx) * 2 * np.pi
+        ky = np.fft.fftfreq(ny, d=dy) * 2 * np.pi
+        KX, KY = np.meshgrid(kx, ky, indexing="ij")
         K = np.sqrt(KX**2 + KY**2)
 
+        # Define Bins
         k_max = min(np.abs(kx).max(), np.abs(ky).max())
         dk = 2 * np.pi / max(Lx, Ly)
         k_bins = np.arange(0, k_max + dk, dk)
         k_centers = 0.5 * (k_bins[:-1] + k_bins[1:])
 
-        power_radial = np.zeros(len(k_centers))
-        for i in range(len(k_centers)):
-            mask = (K >= k_bins[i]) & (K < k_bins[i+1])
-            if np.any(mask):
-                power_radial[i] = np.mean(power_2d[mask])
+        # Binning
+        K_flat = K.ravel()
+        P_flat = power_2d.ravel()
+
+        # Sum the power in each radial bin (energy spectrum)
+        radial_sum, _ = np.histogram(K_flat, bins=k_bins, weights=P_flat)
+
+        power_radial = radial_sum
 
         return k_centers, power_radial
 
-    else:  # 3D
-        if Ly is None or Lz is None:
-            raise ValueError("Ly and Lz required for 3D data")
+    elif num_dimensions == 3:
+        if Ly is None:
+            raise ValueError("Ly required for 3D data")
+        if Lz is None:
+            raise ValueError("Lz required for 3D data")
         nx, ny, nz = data.shape
 
-        fft_data = np.fft.fftn(data)
-        power_3d = np.abs(fft_data) ** 2 / (nx * ny * nz)
+        dx = Lx / nx
+        dy = Ly / ny
+        dz = Lz / nz
 
-        kx = np.fft.fftfreq(nx, d=Lx/nx) * 2 * np.pi
-        ky = np.fft.fftfreq(ny, d=Ly/ny) * 2 * np.pi
-        kz = np.fft.fftfreq(nz, d=Lz/nz) * 2 * np.pi
-        KX, KY, KZ = np.meshgrid(kx, ky, kz, indexing='ij')
+        # Compute FFT with proper normalization
+        # Parseval normalization + physical units
+        fft_data = np.fft.fftn(data)
+        power_3d = np.abs(fft_data) ** 2 / (nx * ny * nz) * dx * dy * dz
+
+        # Grid
+        kx = np.fft.fftfreq(nx, d=dx) * 2 * np.pi
+        ky = np.fft.fftfreq(ny, d=dy) * 2 * np.pi
+        kz = np.fft.fftfreq(nz, d=dz) * 2 * np.pi
+        KX, KY, KZ = np.meshgrid(kx, ky, kz, indexing="ij")
         K = np.sqrt(KX**2 + KY**2 + KZ**2)
 
+        # Define Bins
         k_max = min(np.abs(kx).max(), np.abs(ky).max(), np.abs(kz).max())
         dk = 2 * np.pi / max(Lx, Ly, Lz)
         k_bins = np.arange(0, k_max + dk, dk)
         k_centers = 0.5 * (k_bins[:-1] + k_bins[1:])
 
-        power_radial = np.zeros(len(k_centers))
-        for i in range(len(k_centers)):
-            mask = (K >= k_bins[i]) & (K < k_bins[i+1])
-            if np.any(mask):
-                power_radial[i] = np.mean(power_3d[mask])
+        # Binning
+        K_flat = K.ravel()
+        P_flat = power_3d.ravel()
+
+        # Sum the power in each radial bin (energy spectrum)
+        radial_sum, _ = np.histogram(K_flat, bins=k_bins, weights=P_flat)
+
+        power_radial = radial_sum
 
         return k_centers, power_radial
+
+    raise RuntimeError("Unexpected number of dimensions in fft_power_iso.")
 
 
 def fft_power_1d_slices(
