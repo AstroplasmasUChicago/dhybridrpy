@@ -1,18 +1,20 @@
+import io
+import logging
+import math
 import os
 import re
-import logging
-import numpy as np
+
 import f90nml
-import io
-import math
+import numpy as np
+from f90nml import Namelist
 
 from .containers import Timestep
 from .data import Field, Phase, Raw
 from .tracks import Track, TrackCollection
-from f90nml import Namelist
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 class InputFileParser:
     def __init__(self, input_file: str):
@@ -34,11 +36,11 @@ class InputFileParser:
         """
         Converts the input file content to a Fortran namelist format.
         """
-        with open(self.input_file, 'r') as infile:
+        with open(self.input_file, "r") as infile:
             content = infile.read()
 
         # Regular expression to match sections with curly braces
-        SECTION_PATTERN = re.compile(r'(\w+)\s*\{([^}]*)\}', re.DOTALL)
+        SECTION_PATTERN = re.compile(r"(\w+)\s*\{([^}]*)\}", re.DOTALL)
 
         # Generate namelist content
         namelist_content = []
@@ -65,7 +67,7 @@ class InputFileParser:
                 processed_lines.append(line)
             else:
                 # Ensure proper formatting by removing trailing commas
-                processed_lines.append(line.rstrip(','))
+                processed_lines.append(line.rstrip(","))
         return processed_lines
 
 
@@ -80,21 +82,18 @@ class DHybridrpy:
         exclude_timestep_zero: Excludes the zeroth timestep, if present, from the list of timesteps.
     """
 
-    _FIELD_MAPPING = {
-        "Magnetic": "B",
-        "Electric": "E",
-        "CurrentDens": "J"
-    }
-    _PHASE_MAPPING = {
-        "FluidVel": "V",
-        "PressureTen": "P"
-    }
-    _COMPONENT_MAPPING = {
-        "Intensity": "magnitude"
-    }
-    _SPECIES_PATTERN = re.compile(r'\d+')
+    _FIELD_MAPPING = {"Magnetic": "B", "Electric": "E", "CurrentDens": "J"}
+    _PHASE_MAPPING = {"FluidVel": "V", "PressureTen": "P"}
+    _COMPONENT_MAPPING = {"Intensity": "magnitude"}
+    _SPECIES_PATTERN = re.compile(r"\d+")
 
-    def __init__(self, input_file: str, output_folder: str, lazy: bool = False, exclude_timestep_zero: bool = True):
+    def __init__(
+        self,
+        input_file: str,
+        output_folder: str,
+        lazy: bool = False,
+        exclude_timestep_zero: bool = True,
+    ):
         self.input_file = input_file
         self.output_folder = output_folder
         self.lazy = lazy
@@ -112,9 +111,9 @@ class DHybridrpy:
 
     def _get_time_inputs(self) -> None:
         try:
-            time_dict = self.inputs['time']
-            self.dt = time_dict['dt']
-            self.start_time = time_dict['t0']
+            time_dict = self.inputs["time"]
+            self.dt = time_dict["dt"]
+            self.start_time = time_dict["t0"]
         except KeyError as e:
             missing_key = e.args[0]
             raise KeyError(f"Key '{missing_key}' not found in 'inputs' dictionary.")
@@ -123,7 +122,9 @@ class DHybridrpy:
         if not os.path.exists(self.input_file):
             raise FileNotFoundError(f"Input file {self.input_file} does not exist.")
         if not os.path.isdir(self.output_folder):
-            raise NotADirectoryError(f"Output folder {self.output_folder} is not a directory.")
+            raise NotADirectoryError(
+                f"Output folder {self.output_folder} is not a directory."
+            )
 
     def _process_file(self, dirpath: str, filename: str, timestep: int) -> None:
         folder_components = os.path.relpath(dirpath, self.output_folder).split(os.sep)
@@ -136,9 +137,13 @@ class DHybridrpy:
         elif output_type == "Raw":
             self._process_raw(dirpath, filename, timestep, folder_components)
         else:
-            logger.warning(f"Unknown output type '{output_type}' for {filename}. File not processed.")
+            logger.warning(
+                f"Unknown output type '{output_type}' for {filename}. File not processed."
+            )
 
-    def _process_field(self, dirpath: str, filename: str, timestep: int, folder_components: list) -> None:
+    def _process_field(
+        self, dirpath: str, filename: str, timestep: int, folder_components: list
+    ) -> None:
         category = folder_components[1]
         if category == "CurrentDens":
             folder_components.insert(2, "Total")
@@ -156,14 +161,24 @@ class DHybridrpy:
         self._FIELD_NAMES.add(name)
         if timestep not in self._timesteps_dict:
             self._timesteps_dict[timestep] = Timestep(timestep)
-        time = timestep*self.dt + self.start_time
+        time = timestep * self.dt + self.start_time
         time_ndecimals = max(0, math.ceil(-math.log10(self.dt)) + 1)
-        field = Field(os.path.join(dirpath, filename), name, timestep, time, time_ndecimals, self.lazy, field_type)
+        field = Field(
+            os.path.join(dirpath, filename),
+            name,
+            timestep,
+            time,
+            time_ndecimals,
+            self.lazy,
+            field_type,
+        )
         self._timesteps_dict[timestep].add_field(field)
 
-    def _process_phase(self, dirpath: str, filename: str, timestep: int, folder_components: list) -> None:
+    def _process_phase(
+        self, dirpath: str, filename: str, timestep: int, folder_components: list
+    ) -> None:
         name = folder_components[1]
-        
+
         # Manage bulk velocity, pressure tensor, and scalar pressure special cases
         if name == "FluidVel" or name == "PressureTen":
             species_str = folder_components[-2]
@@ -180,24 +195,40 @@ class DHybridrpy:
 
         if name == "x3x2x1" and "pres" in filename:
             name = "P"
-        
+
         self._PHASE_NAMES.add(name)
-        species = int(self._SPECIES_PATTERN.search(species_str).group()) if species_str != "Total" else species_str
+        species = (
+            int(self._SPECIES_PATTERN.search(species_str).group())
+            if species_str != "Total"
+            else species_str
+        )
         if timestep not in self._timesteps_dict:
             self._timesteps_dict[timestep] = Timestep(timestep)
-        time = timestep*self.dt + self.start_time
+        time = timestep * self.dt + self.start_time
         time_ndecimals = max(0, math.ceil(-math.log10(self.dt)) + 1)
-        phase = Phase(os.path.join(dirpath, filename), name, timestep, time, time_ndecimals, self.lazy, species)
+        phase = Phase(
+            os.path.join(dirpath, filename),
+            name,
+            timestep,
+            time,
+            time_ndecimals,
+            self.lazy,
+            species,
+        )
         self._timesteps_dict[timestep].add_phase(phase)
 
-    def _process_raw(self, dirpath: str, filename: str, timestep: int, folder_components: list) -> None:
+    def _process_raw(
+        self, dirpath: str, filename: str, timestep: int, folder_components: list
+    ) -> None:
         name = "raw"
         species_str = folder_components[-1]
         species = int(self._SPECIES_PATTERN.search(species_str).group())
         if timestep not in self._timesteps_dict:
             self._timesteps_dict[timestep] = Timestep(timestep)
-        time = timestep*self.dt + self.start_time
-        raw = Raw(os.path.join(dirpath, filename), name, timestep, time, self.lazy, species)
+        time = timestep * self.dt + self.start_time
+        raw = Raw(
+            os.path.join(dirpath, filename), name, timestep, time, self.lazy, species
+        )
         self._timesteps_dict[timestep].add_raw(raw)
 
     def _traverse_directory(self) -> None:
@@ -235,14 +266,20 @@ class DHybridrpy:
         num_timesteps = len(timesteps)
         if -num_timesteps <= index < num_timesteps:
             return self.timestep(timesteps[index])
-        raise IndexError(f"Index {index} is out of range. Valid range: {-num_timesteps} to {num_timesteps-1}.")
+        raise IndexError(
+            f"Index {index} is out of range. Valid range: {-num_timesteps} to {num_timesteps - 1}."
+        )
 
     def timesteps(self) -> np.ndarray:
         """Retrieve an array of the timesteps."""
 
         if self._sorted_timesteps is None:
             self._sorted_timesteps = np.sort(list(self._timesteps_dict))
-        if self.exclude_timestep_zero and len(self._sorted_timesteps) > 0 and self._sorted_timesteps[0] == 0:
+        if (
+            self.exclude_timestep_zero
+            and len(self._sorted_timesteps) > 0
+            and self._sorted_timesteps[0] == 0
+        ):
             return self._sorted_timesteps[1:]
         return self._sorted_timesteps
 
@@ -252,29 +289,27 @@ class DHybridrpy:
         tracks_folder = os.path.join(self.output_folder, "Tracks")
         if not os.path.isdir(tracks_folder):
             return
-        
-        species_pattern = re.compile(r'Sp(\d+)')
-        track_file_pattern = re.compile(r'track_Sp(\d+)\.h5$')
-        
+
+        species_pattern = re.compile(r"Sp(\d+)")
+        track_file_pattern = re.compile(r"track_Sp(\d+)\.h5$")
+
         for species_folder in os.listdir(tracks_folder):
             species_match = species_pattern.match(species_folder)
             if not species_match:
                 continue
-            
+
             species = int(species_match.group(1))
             species_path = os.path.join(tracks_folder, species_folder)
-            
+
             if not os.path.isdir(species_path):
                 continue
-            
+
             for filename in os.listdir(species_path):
                 file_match = track_file_pattern.match(filename)
                 if file_match:
                     file_path = os.path.join(species_path, filename)
                     self._track_collections[species] = TrackCollection(
-                        file_path=file_path,
-                        species=species,
-                        lazy=self.lazy
+                        file_path=file_path, species=species, lazy=self.lazy
                     )
 
     def track(self, track_id: str, species: int = 1) -> Track:

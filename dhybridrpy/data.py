@@ -15,6 +15,7 @@ from dask.delayed import delayed
 
 # Standalone functions for numpy arrays
 
+
 def fft_power_iso(
     data: np.ndarray,
     Lx: float,
@@ -167,7 +168,9 @@ def fft_power_1d_slices(
 
     num_dimensions = data.ndim
     if num_dimensions < 1 or num_dimensions > 3:
-        raise NotImplementedError("fft_power_1d_slices only supports 1D, 2D, or 3D data.")
+        raise NotImplementedError(
+            "fft_power_1d_slices only supports 1D, 2D, or 3D data."
+        )
 
     # Get grid points along the chosen direction
     if direction == "x":
@@ -185,7 +188,7 @@ def fft_power_1d_slices(
         axis = 2
 
     # Wavenumber array (positive frequencies only)
-    k_full = np.fft.fftfreq(n, d=L/n) * 2 * np.pi
+    k_full = np.fft.fftfreq(n, d=L / n) * 2 * np.pi
     pos_mask = k_full >= 0
     k = k_full[pos_mask]
 
@@ -199,11 +202,23 @@ def fft_power_1d_slices(
             slices = [data[i, :] for i in range(data.shape[0])]
     else:  # 3D
         if axis == 0:
-            slices = [data[:, j, kk] for j in range(data.shape[1]) for kk in range(data.shape[2])]
+            slices = [
+                data[:, j, kk]
+                for j in range(data.shape[1])
+                for kk in range(data.shape[2])
+            ]
         elif axis == 1:
-            slices = [data[i, :, kk] for i in range(data.shape[0]) for kk in range(data.shape[2])]
+            slices = [
+                data[i, :, kk]
+                for i in range(data.shape[0])
+                for kk in range(data.shape[2])
+            ]
         else:
-            slices = [data[i, j, :] for i in range(data.shape[0]) for j in range(data.shape[1])]
+            slices = [
+                data[i, j, :]
+                for i in range(data.shape[0])
+                for j in range(data.shape[1])
+            ]
 
     # Compute power spectrum for each slice
     power_spectra = []
@@ -231,7 +246,9 @@ def fft_power_1d_slices(
 
 
 class BaseProperties:
-    def __init__(self, file_path: str, name: str, timestep: int, time: float, lazy: bool):
+    def __init__(
+        self, file_path: str, name: str, timestep: int, time: float, lazy: bool
+    ):
         self.file_path = file_path
         self.name = name
         self.timestep = timestep
@@ -241,13 +258,14 @@ class BaseProperties:
 
     def __repr__(self) -> str:
         attrs = ", ".join(
-            f"{attr}={value}" for attr, value in self.__dict__.items() if not attr.startswith("_")
+            f"{attr}={value}"
+            for attr, value in self.__dict__.items()
+            if not attr.startswith("_")
         )
         return f"{self.__class__.__name__}({attrs})"
 
 
 class Data(BaseProperties):
-
     _X = "$x / d_i$"
     _Y = "$y / d_i$"
     _Z = "$z / d_i$"
@@ -263,43 +281,39 @@ class Data(BaseProperties):
             "p1x1": (_X, _PX),
             "p1x2": (_Y, _PX),
             "p1x3": (_Z, _PX),
-
             "p2x1": (_X, _PY),
             "p2x2": (_Y, _PY),
             "p2x3": (_Z, _PY),
-
             "p3x1": (_X, _PZ),
             "p3x2": (_Y, _PZ),
             "p3x3": (_Z, _PZ),
-
             "x2x1": (_X, _Y),
             "x3x1": (_X, _Z),
             "x3x2": (_Y, _Z),
-
             "p2p1": (_PX, _PY),
             "p3p1": (_PX, _PZ),
             "p3p2": (_PY, _PZ),
-
             "ptx1": (_X, _PTOT),
             "ptx2": (_Y, _PTOT),
             "ptx3": (_Z, _PTOT),
-
             "etx1": (_X, _ETOT),
             "etx2": (_Y, _ETOT),
             "etx3": (_Z, _ETOT),
-        }
+        },
     )
 
     # For derived object plot titles
-    _BINOP_SYMBOL = {
-        "add": "+",
-        "sub": "-",
-        "mul": "*",
-        "truediv":"/", 
-        "pow":"^"
-    }
+    _BINOP_SYMBOL = {"add": "+", "sub": "-", "mul": "*", "truediv": "/", "pow": "^"}
 
-    def __init__(self, file_path: str, name: str, timestep: int, time: float, time_ndecimals: int, lazy: bool):
+    def __init__(
+        self,
+        file_path: str,
+        name: str,
+        timestep: int,
+        time: float,
+        time_ndecimals: int,
+        lazy: bool,
+    ):
         super().__init__(file_path, name, timestep, time, lazy)
         self._time_ndecimals = time_ndecimals
         self._plot_title = rf"{name} at time {round(time, self._time_ndecimals)} $\omega_{{ci}}^{{-1}}$"
@@ -313,15 +327,17 @@ class Data(BaseProperties):
                 self._data_dict[key] = file["AXIS"][axis_name][:]
         return self._data_dict[key]
 
-    def _compute_coordinates(self, axis_name: str, size: int) -> Union[np.ndarray, da.Array]:
+    def _compute_coordinates(
+        self, axis_name: str, size: int
+    ) -> Union[np.ndarray, da.Array]:
         key = f"{axis_name} coords"
         if key not in self._data_dict:
             axis_limits = self._get_coordinate_limits(axis_name)
             delta = (axis_limits[1] - axis_limits[0]) / size
             grid = da.arange(size, chunks="auto") if self.lazy else np.arange(size)
-            self._data_dict[key] = delta*grid + (delta/2) + axis_limits[0]
+            self._data_dict[key] = delta * grid + (delta / 2) + axis_limits[0]
         return self._data_dict[key]
-    
+
     def _get_data_shape(self) -> Tuple[int, ...]:
         """Retrieve the shape of the data without loading it."""
         if self._data_shape is None:
@@ -341,15 +357,17 @@ class Data(BaseProperties):
     def data(self) -> Union[np.ndarray, da.Array]:
         """Retrieve the data at each grid point."""
         if self.name not in self._data_dict:
+
             def loader():
                 with h5py.File(self.file_path, "r") as f:
                     return f["DATA"][:].T
+
             if self.lazy:
                 delayed_obj = delayed(loader)()
                 self._data_dict[self.name] = da.from_delayed(
                     delayed_obj,
                     shape=self._get_data_shape(),
-                    dtype=self._get_data_dtype()
+                    dtype=self._get_data_dtype(),
                 )
             else:
                 self._data_dict[self.name] = loader()
@@ -394,9 +412,7 @@ class Data(BaseProperties):
                 f"{other._get_data_shape()}"
             )
         if self.timestep != other.timestep:
-            raise ValueError(
-                f"Timesteps differ: {self.timestep} vs {other.timestep}"
-            )
+            raise ValueError(f"Timesteps differ: {self.timestep} vs {other.timestep}")
 
     def _apply_operation(self, other, op):
         """Apply a binary operation to self and another Data object or scalar."""
@@ -411,7 +427,6 @@ class Data(BaseProperties):
 
         symbol = self._BINOP_SYMBOL.get(op.__name__, op.__name__)
         return self._create_new_instance(result, symbol, other_name, other)
-
 
     def _extra_init_args(self) -> tuple:
         """Positional args that the subclass's __init__ expects"""
@@ -431,28 +446,30 @@ class Data(BaseProperties):
         result_array,
         op_symbol: str,
         other_name: str,
-        other_obj = None,
+        other_obj=None,
     ):
         """Create a new Data instance with the result of the operation."""
-        
-        file_path = other_obj.file_path if isinstance(other_obj, Data) else self.file_path
+
+        file_path = (
+            other_obj.file_path if isinstance(other_obj, Data) else self.file_path
+        )
 
         if op_symbol:
             if op_symbol == "^":
                 new_name = f"({self.name}){op_symbol}{other_name}"
             else:
                 new_name = f"{self.name}{op_symbol}{other_name}"
-        else: # name is supplied by ufunc wrapper
+        else:  # name is supplied by ufunc wrapper
             new_name = other_name
 
         inst = self.__class__(
             file_path,
-            new_name, 
-            self.timestep, 
-            self.time,    
-            self._time_ndecimals, 
+            new_name,
+            self.timestep,
+            self.time,
+            self._time_ndecimals,
             self.lazy,
-            *self._extra_init_args()
+            *self._extra_init_args(),
         )
         inst._data_dict = {k: v for k, v in self._data_dict.items() if "AXIS" in k}
         inst._data_dict[new_name] = result_array
@@ -464,18 +481,38 @@ class Data(BaseProperties):
 
         return inst
 
-    def __add__(self, other): return self._apply_operation(other, operator.add)
-    def __sub__(self, other): return self._apply_operation(other, operator.sub)
-    def __mul__(self, other): return self._apply_operation(other, operator.mul)
-    def __truediv__(self, other): return self._apply_operation(other, operator.truediv)
-    def __pow__(self, other): return self._apply_operation(other, operator.pow)
-    def __neg__(self): return self * (-1)
-    def __radd__(self, other): return self.__add__(other)
-    def __rmul__(self, other): return self.__mul__(other)
-    def __rsub__(self, other): return (-self).__add__(other)
-    def __rtruediv__(self, other): return self.__pow__(-1) * other
+    def __add__(self, other):
+        return self._apply_operation(other, operator.add)
 
-     # Ensure that mixed Data and NumPy operations produce a Data object
+    def __sub__(self, other):
+        return self._apply_operation(other, operator.sub)
+
+    def __mul__(self, other):
+        return self._apply_operation(other, operator.mul)
+
+    def __truediv__(self, other):
+        return self._apply_operation(other, operator.truediv)
+
+    def __pow__(self, other):
+        return self._apply_operation(other, operator.pow)
+
+    def __neg__(self):
+        return self * (-1)
+
+    def __radd__(self, other):
+        return self.__add__(other)
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
+
+    def __rsub__(self, other):
+        return (-self).__add__(other)
+
+    def __rtruediv__(self, other):
+        return self.__pow__(-1) * other
+
+        # Ensure that mixed Data and NumPy operations produce a Data object
+
     __array_priority__ = 20
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
@@ -506,7 +543,9 @@ class Data(BaseProperties):
             return result_array
 
         # Build a descriptive name: e.g. "sin(By)"
-        names = ",".join(obj.name if isinstance(obj, Data) else str(obj) for obj in inputs)
+        names = ",".join(
+            obj.name if isinstance(obj, Data) else str(obj) for obj in inputs
+        )
         new_name = f"{ufunc.__name__}({names})"
 
         # Choose a parent to copy metadata from (take self if it's a Data object)
@@ -549,7 +588,9 @@ class Data(BaseProperties):
         # Determine which axis corresponds to the direction and compute mean/std
         if num_dimensions == 1:
             # For 1D data, just return as-is (no averaging needed)
-            coord_data = self.xdata.compute() if is_computable(self.xdata) else self.xdata
+            coord_data = (
+                self.xdata.compute() if is_computable(self.xdata) else self.xdata
+            )
             mean_data = data
             std_data = np.zeros_like(data)
         elif num_dimensions == 2:
@@ -559,14 +600,20 @@ class Data(BaseProperties):
                 # Average over y (axis 1)
                 mean_data = np.mean(data, axis=1)
                 std_data = np.std(data, axis=1)
-                coord_data = self.xdata.compute() if is_computable(self.xdata) else self.xdata
+                coord_data = (
+                    self.xdata.compute() if is_computable(self.xdata) else self.xdata
+                )
             elif direction == "y":
                 # Average over x (axis 0)
                 mean_data = np.mean(data, axis=0)
                 std_data = np.std(data, axis=0)
-                coord_data = self.ydata.compute() if is_computable(self.ydata) else self.ydata
+                coord_data = (
+                    self.ydata.compute() if is_computable(self.ydata) else self.ydata
+                )
             else:  # z
-                raise ValueError("Cannot average along 'z' for 2D data. Use 'x' or 'y'.")
+                raise ValueError(
+                    "Cannot average along 'z' for 2D data. Use 'x' or 'y'."
+                )
         elif num_dimensions == 3:
             # For 3D data: shape is (nx, ny, nz)
             # x -> axis 0, y -> axis 1, z -> axis 2
@@ -574,17 +621,23 @@ class Data(BaseProperties):
                 # Average over y and z (axes 1 and 2)
                 mean_data = np.mean(data, axis=(1, 2))
                 std_data = np.std(data, axis=(1, 2))
-                coord_data = self.xdata.compute() if is_computable(self.xdata) else self.xdata
+                coord_data = (
+                    self.xdata.compute() if is_computable(self.xdata) else self.xdata
+                )
             elif direction == "y":
                 # Average over x and z (axes 0 and 2)
                 mean_data = np.mean(data, axis=(0, 2))
                 std_data = np.std(data, axis=(0, 2))
-                coord_data = self.ydata.compute() if is_computable(self.ydata) else self.ydata
+                coord_data = (
+                    self.ydata.compute() if is_computable(self.ydata) else self.ydata
+                )
             else:  # z
                 # Average over x and y (axes 0 and 1)
                 mean_data = np.mean(data, axis=(0, 1))
                 std_data = np.std(data, axis=(0, 1))
-                coord_data = self.zdata.compute() if is_computable(self.zdata) else self.zdata
+                coord_data = (
+                    self.zdata.compute() if is_computable(self.zdata) else self.zdata
+                )
         else:
             raise NotImplementedError("avg_1d only supports 1D, 2D, or 3D data.")
 
@@ -606,6 +659,7 @@ class Data(BaseProperties):
                 - k: 1D array of wavenumber values (in units of 2π/L where L is box size)
                 - power: 1D array of power spectral density at each k
         """
+
         def is_computable(arr):
             return self.lazy and isinstance(arr, da.Array)
 
@@ -613,16 +667,26 @@ class Data(BaseProperties):
         num_dimensions = data.ndim
 
         # Get box sizes from coordinate limits
-        xlim = self.xlimdata.compute() if is_computable(self.xlimdata) else self.xlimdata
+        xlim = (
+            self.xlimdata.compute() if is_computable(self.xlimdata) else self.xlimdata
+        )
         Lx = xlim[1] - xlim[0]
 
         Ly = None
         Lz = None
         if num_dimensions >= 2:
-            ylim = self.ylimdata.compute() if is_computable(self.ylimdata) else self.ylimdata
+            ylim = (
+                self.ylimdata.compute()
+                if is_computable(self.ylimdata)
+                else self.ylimdata
+            )
             Ly = ylim[1] - ylim[0]
         if num_dimensions >= 3:
-            zlim = self.zlimdata.compute() if is_computable(self.zlimdata) else self.zlimdata
+            zlim = (
+                self.zlimdata.compute()
+                if is_computable(self.zlimdata)
+                else self.zlimdata
+            )
             Lz = zlim[1] - zlim[0]
 
         return fft_power_iso(data, Lx, Ly, Lz)
@@ -638,7 +702,7 @@ class Data(BaseProperties):
         xlim: Optional[tuple] = None,
         ylim: Optional[tuple] = None,
         loglog: bool = True,
-        **kwargs
+        **kwargs,
     ) -> Tuple[Axes, Line2D]:
         """
         Plot the FFT power spectrum.
@@ -691,7 +755,7 @@ class Data(BaseProperties):
         Compute 1D FFT power spectra along a chosen direction with statistics.
 
         Extracts 1D slices along the specified direction, computes FFT power
-        spectrum for each slice, then returns the geometric mean and 
+        spectrum for each slice, then returns the geometric mean and
         multiplicative standard deviation across all slices. Statistics are
         computed in log space for proper representation on log-log plots.
 
@@ -705,6 +769,7 @@ class Data(BaseProperties):
                 - power_std_lower: 1D array of geometric mean / multiplicative std
                 - power_std_upper: 1D array of geometric mean * multiplicative std
         """
+
         def is_computable(arr):
             return self.lazy and isinstance(arr, da.Array)
 
@@ -712,11 +777,23 @@ class Data(BaseProperties):
 
         # Get box size along the chosen direction
         if direction == "x":
-            lim = self.xlimdata.compute() if is_computable(self.xlimdata) else self.xlimdata
+            lim = (
+                self.xlimdata.compute()
+                if is_computable(self.xlimdata)
+                else self.xlimdata
+            )
         elif direction == "y":
-            lim = self.ylimdata.compute() if is_computable(self.ylimdata) else self.ylimdata
+            lim = (
+                self.ylimdata.compute()
+                if is_computable(self.ylimdata)
+                else self.ylimdata
+            )
         else:  # z
-            lim = self.zlimdata.compute() if is_computable(self.zlimdata) else self.zlimdata
+            lim = (
+                self.zlimdata.compute()
+                if is_computable(self.zlimdata)
+                else self.zlimdata
+            )
         L = lim[1] - lim[0]
 
         return fft_power_1d_slices(data, L, direction)
@@ -737,7 +814,7 @@ class Data(BaseProperties):
         fill_color: Optional[str] = None,
         line_color: Optional[str] = None,
         show_std: bool = True,
-        **kwargs
+        **kwargs,
     ) -> Tuple[Axes, Line2D]:
         """
         Plot 1D FFT power spectrum along a chosen direction with std deviation band.
@@ -777,11 +854,7 @@ class Data(BaseProperties):
             if show_std:
                 fc = fill_color if fill_color else line.get_color()
                 ax.fill_between(
-                    k_plot,
-                    std_lower_plot,
-                    std_upper_plot,
-                    alpha=fill_alpha,
-                    color=fc
+                    k_plot, std_lower_plot, std_upper_plot, alpha=fill_alpha, color=fc
                 )
         else:
             line = ax.plot(k, power_mean, color=line_color, **kwargs)[0]
@@ -789,11 +862,7 @@ class Data(BaseProperties):
             if show_std:
                 fc = fill_color if fill_color else line.get_color()
                 ax.fill_between(
-                    k,
-                    power_std_lower,
-                    power_std_upper,
-                    alpha=fill_alpha,
-                    color=fc
+                    k, power_std_lower, power_std_upper, alpha=fill_alpha, color=fc
                 )
 
         default_title = rf"{self.name} 1D power spectrum (along {direction}) at time {round(self.time, self._time_ndecimals)} $\omega_{{ci}}^{{-1}}$"
@@ -825,7 +894,7 @@ class Data(BaseProperties):
         fill_color: Optional[str] = None,
         line_color: Optional[str] = None,
         show_std: bool = True,
-        **kwargs
+        **kwargs,
     ) -> Tuple[Axes, Line2D]:
         """
         Plot 1D average along a chosen direction with fill_between showing standard deviation.
@@ -880,11 +949,7 @@ class Data(BaseProperties):
         if show_std and num_dimensions > 1:
             fc = fill_color if fill_color else line.get_color()
             ax.fill_between(
-                coord_data,
-                std_lower,
-                std_upper,
-                alpha=fill_alpha,
-                color=fc
+                coord_data, std_lower, std_upper, alpha=fill_alpha, color=fc
             )
 
         # Set labels and title
@@ -898,7 +963,8 @@ class Data(BaseProperties):
 
         return ax, line
 
-    def plot(self,
+    def plot(
+        self,
         *,
         ax: Optional[Axes] = None,
         dpi: int = 100,
@@ -912,8 +978,8 @@ class Data(BaseProperties):
         colormap: str = "viridis",
         show_colorbar: bool = True,
         colorbar_label: Optional[str] = None,
-        slice_axis: Literal["x","y","z"] = "x",
-        **kwargs
+        slice_axis: Literal["x", "y", "z"] = "x",
+        **kwargs,
     ) -> Tuple[Axes, Union[Line2D, QuadMesh]]:
         """
         Plot 1D, 2D, or 3D data.
@@ -939,7 +1005,7 @@ class Data(BaseProperties):
             raise NotImplementedError("Plotting is restricted to 1D, 2D, or 3D data.")
 
         if ax is None:
-            fig, ax = plt.subplots(figsize=(8,6), dpi=dpi)
+            fig, ax = plt.subplots(figsize=(8, 6), dpi=dpi)
             if num_dimensions == 3:
                 plt.subplots_adjust(bottom=0.2)
         else:
@@ -950,7 +1016,9 @@ class Data(BaseProperties):
 
         data = self.data.compute() if is_computable(self.data) else self.data
         xdata = self.xdata.compute() if is_computable(self.xdata) else self.xdata
-        xlimdata = self.xlimdata.compute() if is_computable(self.xlimdata) else self.xlimdata
+        xlimdata = (
+            self.xlimdata.compute() if is_computable(self.xlimdata) else self.xlimdata
+        )
 
         if num_dimensions == 1:
             line = ax.plot(xdata, data, **kwargs)[0]
@@ -962,11 +1030,13 @@ class Data(BaseProperties):
             return ax, line
         elif num_dimensions == 2:
             ydata = self.ydata.compute() if is_computable(self.ydata) else self.ydata
-            ylimdata = self.ylimdata.compute() if is_computable(self.ylimdata) else self.ylimdata
-            X, Y = np.meshgrid(xdata, ydata, indexing="ij")
-            mesh = ax.pcolormesh(
-                X, Y, data, cmap=colormap, shading="auto", **kwargs
+            ylimdata = (
+                self.ylimdata.compute()
+                if is_computable(self.ylimdata)
+                else self.ylimdata
             )
+            X, Y = np.meshgrid(xdata, ydata, indexing="ij")
+            mesh = ax.pcolormesh(X, Y, data, cmap=colormap, shading="auto", **kwargs)
             ax.set_title(title if title else self._plot_title)
             xlabel_default, ylabel_default = self._LABEL_MAPPINGS[self.name]
             ax.set_xlabel(xlabel if xlabel else xlabel_default)
@@ -979,19 +1049,32 @@ class Data(BaseProperties):
 
             return ax, mesh
         else:
-            if slice_axis not in ["x","y","z"]:
+            if slice_axis not in ["x", "y", "z"]:
                 raise ValueError("Slice axis must be 'x', 'y', or 'z'.")
 
             ydata = self.ydata.compute() if is_computable(self.ydata) else self.ydata
-            ylimdata = self.ylimdata.compute() if is_computable(self.ylimdata) else self.ylimdata
+            ylimdata = (
+                self.ylimdata.compute()
+                if is_computable(self.ylimdata)
+                else self.ylimdata
+            )
             zdata = self.zdata.compute() if is_computable(self.zdata) else self.zdata
-            zlimdata = self.zlimdata.compute() if is_computable(self.zlimdata) else self.zlimdata
+            zlimdata = (
+                self.zlimdata.compute()
+                if is_computable(self.zlimdata)
+                else self.zlimdata
+            )
 
             initial_slice = 0
             if slice_axis == "x":
                 Y, Z = np.meshgrid(ydata, zdata, indexing="ij")
                 mesh = ax.pcolormesh(
-                    Y, Z, data[initial_slice,:,:], cmap=colormap, shading="auto", **kwargs
+                    Y,
+                    Z,
+                    data[initial_slice, :, :],
+                    cmap=colormap,
+                    shading="auto",
+                    **kwargs,
                 )
                 initial_position_str = f"\nx = {xdata[initial_slice]:.2f}"
                 ax.set_xlabel(ylabel if ylabel else "$y$")
@@ -1001,7 +1084,12 @@ class Data(BaseProperties):
             elif slice_axis == "y":
                 X, Z = np.meshgrid(xdata, zdata, indexing="ij")
                 mesh = ax.pcolormesh(
-                    X, Z, data[:,initial_slice,:], cmap=colormap, shading="auto", **kwargs
+                    X,
+                    Z,
+                    data[:, initial_slice, :],
+                    cmap=colormap,
+                    shading="auto",
+                    **kwargs,
                 )
                 initial_position_str = f"\ny = {ydata[initial_slice]:.2f}"
                 ax.set_xlabel(xlabel if xlabel else "$x$")
@@ -1011,7 +1099,12 @@ class Data(BaseProperties):
             else:
                 X, Y = np.meshgrid(xdata, ydata, indexing="ij")
                 mesh = ax.pcolormesh(
-                    X, Y, data[:,:,initial_slice], cmap=colormap, shading="auto", **kwargs
+                    X,
+                    Y,
+                    data[:, :, initial_slice],
+                    cmap=colormap,
+                    shading="auto",
+                    **kwargs,
                 )
                 initial_position_str = f"\nz = {zdata[initial_slice]:.2f}"
                 ax.set_xlabel(xlabel if xlabel else "$x$")
@@ -1019,25 +1112,34 @@ class Data(BaseProperties):
                 ax.set_xlim(xlim if xlim else xlimdata)
                 ax.set_ylim(ylim if ylim else ylimdata)
 
-            ax.set_title(title if title else f"{self._plot_title}{initial_position_str}")
+            ax.set_title(
+                title if title else f"{self._plot_title}{initial_position_str}"
+            )
             if show_colorbar:
                 cbar = plt.colorbar(mesh, ax=ax)
                 cbar.set_label(colorbar_label if colorbar_label else f"{self.name}")
 
             ax_slider = fig.add_axes([0.2, 0.05, 0.6, 0.03])
             data_shape = data.shape[{"x": 0, "y": 1, "z": 2}[slice_axis]]
-            slider = Slider(ax_slider, f"{slice_axis.capitalize()} axis slice", 0, data_shape-1, valinit=initial_slice, valstep=1)
+            slider = Slider(
+                ax_slider,
+                f"{slice_axis.capitalize()} axis slice",
+                0,
+                data_shape - 1,
+                valinit=initial_slice,
+                valstep=1,
+            )
 
             def update(val: float) -> None:
                 slice_index = int(slider.val)
                 if slice_axis == "x":
-                    data_slice = data[slice_index,:,:]
+                    data_slice = data[slice_index, :, :]
                     position_str = f"\nx = {xdata[slice_index]:.2f}"
                 elif slice_axis == "y":
-                    data_slice = data[:,slice_index,:]
+                    data_slice = data[:, slice_index, :]
                     position_str = f"\ny = {ydata[slice_index]:.2f}"
                 else:
-                    data_slice = data[:,:,slice_index]
+                    data_slice = data[:, :, slice_index]
                     position_str = f"\nz = {zdata[slice_index]:.2f}"
 
                 ax.set_title(title if title else f"{self._plot_title}{position_str}")
@@ -1049,9 +1151,18 @@ class Data(BaseProperties):
 
 
 class Field(Data):
-    def __init__(self, file_path: str, name: str, timestep: int, time: float, time_ndecimals: int, lazy: bool, field_type: str):
+    def __init__(
+        self,
+        file_path: str,
+        name: str,
+        timestep: int,
+        time: float,
+        time_ndecimals: int,
+        lazy: bool,
+        field_type: str,
+    ):
         super().__init__(file_path, name, timestep, time, time_ndecimals, lazy)
-        self.type = field_type # The type of field, e.g., "External"
+        self.type = field_type  # The type of field, e.g., "External"
         self._plot_title += f" (type = {self.type})"
 
     def _check_compatability(self, other):
@@ -1064,7 +1175,16 @@ class Field(Data):
 
 
 class Phase(Data):
-    def __init__(self, file_path: str, name: str, timestep: int, time: float, time_ndecimals: int, lazy: bool, species: Union[int, str]):
+    def __init__(
+        self,
+        file_path: str,
+        name: str,
+        timestep: int,
+        time: float,
+        time_ndecimals: int,
+        lazy: bool,
+        species: Union[int, str],
+    ):
         super().__init__(file_path, name, timestep, time, time_ndecimals, lazy)
         self.species = species
         self._plot_title += f" (species = {self.species})"
@@ -1079,7 +1199,15 @@ class Phase(Data):
 
 
 class Raw(BaseProperties):
-    def __init__(self, file_path: str, name: str, timestep: int, time: float, lazy: bool, species: int):
+    def __init__(
+        self,
+        file_path: str,
+        name: str,
+        timestep: int,
+        time: float,
+        lazy: bool,
+        species: int,
+    ):
         super().__init__(file_path, name, timestep, time, lazy)
         self.species = species
 
@@ -1088,6 +1216,7 @@ class Raw(BaseProperties):
         """Retrieve a dictionary of the raw file's keys and values."""
         if not self._data_dict:
             with h5py.File(self.file_path, "r") as file:
+
                 def dict_helper():
                     with h5py.File(self.file_path, "r") as f:
                         return f[key][:]
@@ -1097,7 +1226,9 @@ class Raw(BaseProperties):
                         shape = file[key].shape
                         dtype = file[key].dtype
                         delayed_helper = delayed(dict_helper)()
-                        self._data_dict[key] = da.from_delayed(delayed_helper, shape=shape, dtype=dtype)
+                        self._data_dict[key] = da.from_delayed(
+                            delayed_helper, shape=shape, dtype=dtype
+                        )
                     else:
                         self._data_dict[key] = file[key][:]
         return self._data_dict
