@@ -216,6 +216,18 @@ class DHybridrpy:
             return self._timesteps_dict[ts]
         raise ValueError(f"Timestep {ts} not found.")
 
+    def timestep_closest(self, ts: int, verbose: bool = False) -> Timestep:
+        """Access field, phase, and raw file information at the closest available timestep."""
+        timesteps = self.timesteps()
+        if len(timesteps) == 0:
+            raise ValueError("No timesteps available.")
+        closest_ts = min(timesteps, key=lambda x: abs(x - ts))
+        if verbose:
+            logger.info(
+                f"Requested timestep: {ts}. Closest available timestep: {closest_ts}."
+            )
+        return self.timestep(closest_ts)
+
     def timestep_index(self, index: int) -> Timestep:
         """Access field, phase, and raw file information at a given timestep index."""
 

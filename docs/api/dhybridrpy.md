@@ -57,6 +57,28 @@ print(ts.phases)
 
 ---
 
+### `timestep_closest(index: int, verbose: bool = False) -> Timestep`
+
+Access field, phase, and raw file information at the closest available timestep.
+
+**Parameters:**
+
+- `index` (`int`): The index at which to find the closest available timestep
+- `verbose` (`bool`): If `True`, logs information about the requested and closest available timesteps
+
+**Returns:** `Timestep` object
+
+**Raises:** `ValueError` if there are no available timesteps
+
+**Example:**
+
+```python
+ts_first = dpy.timestep_closest(100, verbose=True)
+INFO:dhybridrpy.dhybridrpy:Requested timestep: 100. Closest available timestep: 96.
+```
+
+---
+
 ### `timestep_index(index: int) -> Timestep`
 
 Access field, phase, and raw file information at a given timestep index.
