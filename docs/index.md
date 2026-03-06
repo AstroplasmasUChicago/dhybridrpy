@@ -1,4 +1,8 @@
-# dhybridrpy
+<div id="p5-banner"></div>
+
+<style>
+.md-content h1:first-child { display: none; }
+</style>
 
 ![PyPI version](https://img.shields.io/pypi/v/dhybridrpy?label=PyPI&color=blue)
 

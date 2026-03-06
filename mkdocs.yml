@@ -72,6 +72,13 @@ nav:
     - Tracks: api/tracks.md
   - Examples: examples.md
 
+extra_javascript:
+  - https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js
+  - js/banner.js
+
+extra_css:
+  - css/banner.css
+
 extra:
   social:
     - icon: fontawesome/brands/github
