@@ -10,16 +10,22 @@ let S = 1; // scale factor
 
 // ---------- Physics ----------
 const QM_RATIO = 1.0;
-const B0 = 2;
+const B0 = 5;
 const E = { x: 0, y: 0, z: 0 };
 const DT = 0.012;
+
+// ---------- Perspective ----------
+const FOV = 200;
+
+// ---------- Depth layering ----------
+const TEXT_Z = 0; // text sits at z = 0
 
 // ---------- Tunables ----------
 const TRAIL_LIFE = 80;
 const SMOOTHING = 0.08;
 
-let rL = 1;
-let vPar = 1;
+let rL = 0.5;
+let vPar = 0.5;
 
 // ---------- State ----------
 let pos, vel;
@@ -31,7 +37,16 @@ let bhatSmooth = { x: Math.cos(Math.PI / 4), y: Math.sin(Math.PI / 4), z: 0 };
 let colTitle, colSub, colPrimary, colFg;
 
 function getLineY() { return Math.round(H * 0.68); }
-function getArrowBase() { return { x: W - 40 * S, y: H - 30 * S }; }
+
+function project(px, py, pz) {
+  const fov = FOV * S;
+  const scale = fov / (fov + pz);
+  return {
+    x: W * 0.5 + (px - W * 0.5) * scale,
+    y: H * 0.5 + (py - H * 0.5) * scale,
+    s: scale
+  };
+}
 
 function readCssRgb(varName, fallback) {
   const raw = getComputedStyle(document.documentElement)
@@ -100,16 +115,47 @@ function draw() {
   clear();
   detectTheme();
 
-  drawTitle();
-
   const bhat = getBhat();
-  drawBArrow(bhat);
 
   borisStep(bhat);
   wrapAllDirections();
   updateTrail();
 
-  drawParticle();
+  // Behind text (z > TEXT_Z = farther from camera)
+  drawTrailLayer(TEXT_Z, Infinity);
+  if (pos.z > TEXT_Z) drawParticleDot();
+
+  drawTitle();
+
+  // In front of text (z <= TEXT_Z)
+  drawTrailLayer(-Infinity, TEXT_Z);
+  if (pos.z <= TEXT_Z) drawParticleDot();
+
+  drawBIndicator(bhat);
+}
+
+function drawBIndicator(bhat) {
+  const cx = W - 10 * S;
+  const cy = H - 5 * S;
+  const L = 4 * S;
+
+  // Draw line centered on (cx, cy)
+  const halfX = bhat.x * L;
+  const halfY = bhat.y * L;
+  const x1 = cx - halfX;
+  const y1 = cy - halfY;
+  const x2 = cx + halfX;
+  const y2 = cy + halfY;
+
+  stroke(...colPrimary, 160);
+  strokeWeight(2 * S);
+  line(x1, y1, x2, y2);
+
+  // Arrowhead at tip (x2, y2)
+  const nx = -bhat.y;
+  const ny = bhat.x;
+  line(x2, y2, x2 - bhat.x * 5 * S + nx * 3 * S, y2 - bhat.y * 5 * S + ny * 3 * S);
+  line(x2, y2, x2 - bhat.x * 5 * S - nx * 3 * S, y2 - bhat.y * 5 * S - ny * 3 * S);
 }
 
 function drawTitle() {
@@ -125,11 +171,10 @@ function drawTitle() {
   text("A Python package to easily read input + output data from dHybridR.", 22 * S, 104 * S);
 }
 
-// Field points along the line from arrow base -> mouse
+// Field points along the line from banner center -> mouse
 function getBhat() {
-  const ab = getArrowBase();
-  const dx = mouseX - ab.x;
-  const dy = mouseY - ab.y;
+  const dx = mouseX - W * 0.5;
+  const dy = mouseY - H * 0.5;
   const mag = Math.hypot(dx, dy);
 
   let target;
@@ -162,6 +207,11 @@ function wrapAllDirections() {
   if (pos.y > H) { pos.y = 0; wrapped = true; }
   else if (pos.y < 0) { pos.y = H; wrapped = true; }
 
+  // Z wrap, keep depth within a visible range
+  const Z_MAX = FOV * S * 3.0;
+  if (pos.z > Z_MAX) { pos.z -= 2 * Z_MAX; wrapped = true; }
+  else if (pos.z < -Z_MAX) { pos.z += 2 * Z_MAX; wrapped = true; }
+
   // Break trail so we don't draw a diagonal across the banner
   if (wrapped && useTrail) trail.push(null);
 }
@@ -172,7 +222,7 @@ function updateTrail() {
     return;
   }
 
-  trail.push({ x: pos.x, y: pos.y, age: 0 });
+  trail.push({ x: pos.x, y: pos.y, z: pos.z, age: 0 });
 
   for (let p of trail) {
     if (p !== null) p.age++;
@@ -181,39 +231,88 @@ function updateTrail() {
   trail = trail.filter((p) => p === null || p.age < TRAIL_LIFE);
 }
 
-function drawTrail() {
+function drawTrailLayer(zMin, zMax) {
   if (!useTrail) return;
 
   noFill();
-  beginShape();
 
-  for (let p of trail) {
+  // Collect runs of non-null points
+  const runs = [];
+  let run = [];
+  for (const p of trail) {
     if (p === null) {
-      endShape();
-      beginShape();
-      continue;
+      if (run.length > 1) runs.push(run);
+      run = [];
+    } else {
+      run.push(p);
     }
-
-    const a = map(p.age, 0, TRAIL_LIFE, 160, 0);
-    const w = map(p.age, 0, TRAIL_LIFE, 2.2 * S, 0.6 * S);
-
-    stroke(...colPrimary, a);
-    strokeWeight(w);
-    vertex(p.x, p.y);
   }
+  if (run.length > 1) runs.push(run);
 
-  endShape();
+  for (const pts of runs) {
+    // Catmull-Rom subdivide: insert interpolated points between each pair
+    const SUB = 4;
+    const smooth = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[Math.max(i - 1, 0)];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const p3 = pts[Math.min(i + 2, pts.length - 1)];
+
+      for (let j = 0; j < SUB; j++) {
+        const t = j / SUB;
+        const t2 = t * t;
+        const t3 = t2 * t;
+        const sx = 0.5 * (2*p1.x + (-p0.x+p2.x)*t + (2*p0.x-5*p1.x+4*p2.x-p3.x)*t2 + (-p0.x+3*p1.x-3*p2.x+p3.x)*t3);
+        const sy = 0.5 * (2*p1.y + (-p0.y+p2.y)*t + (2*p0.y-5*p1.y+4*p2.y-p3.y)*t2 + (-p0.y+3*p1.y-3*p2.y+p3.y)*t3);
+        const sz = 0.5 * (2*p1.z + (-p0.z+p2.z)*t + (2*p0.z-5*p1.z+4*p2.z-p3.z)*t2 + (-p0.z+3*p1.z-3*p2.z+p3.z)*t3);
+        const sage = p1.age + (p2.age - p1.age) * t;
+        smooth.push({ x: sx, y: sy, z: sz, age: sage });
+      }
+    }
+    smooth.push(pts[pts.length - 1]);
+
+    // Draw smooth segments (filtered by z layer)
+    for (let i = 1; i < smooth.length; i++) {
+      const prev = smooth[i - 1];
+      const cur = smooth[i];
+      const avgZ = (prev.z + cur.z) * 0.5;
+      if (avgZ < zMin || avgZ >= zMax) continue;
+
+      const sp1 = project(prev.x, prev.y, prev.z);
+      const sp2 = project(cur.x, cur.y, cur.z);
+
+      const depthScale = (sp1.s + sp2.s) * 0.5;
+      const fade = edgeFade(cur.x, cur.y, cur.z);
+      const a = map(cur.age, 0, TRAIL_LIFE, 160, 0) * depthScale * fade;
+      const w = map(cur.age, 0, TRAIL_LIFE, 2.2 * S, 0.6 * S) * depthScale;
+
+      stroke(...colPrimary, a);
+      strokeWeight(w);
+      line(sp1.x, sp1.y, sp2.x, sp2.y);
+    }
+  }
 }
 
-function drawParticle() {
-  drawTrail();
+function edgeFade(px, py, pz) {
+  const margin = 10 * S;
+  const Z_MAX = FOV * S * 3.0;
+  const fx = Math.min(px, W - px) / margin;
+  const fy = Math.min(py, H - py) / margin;
+  const fz = (Z_MAX - Math.abs(pz)) / margin;
+  return constrain(Math.min(fx, fy, fz), 0, 1);
+}
+
+function drawParticleDot() {
+  const p = project(pos.x, pos.y, pos.z);
+  const fade = edgeFade(pos.x, pos.y, pos.z);
 
   noStroke();
-  fill(...colPrimary, 70);
-  circle(pos.x, pos.y, 14 * S);
+  fill(...colPrimary, 70 * p.s * fade);
+  circle(p.x, p.y, 14 * S * p.s);
 
-  fill(...colPrimary, 230);
-  circle(pos.x, pos.y, 5 * S);
+  fill(...colPrimary, 230 * p.s * fade);
+  circle(p.x, p.y, 5 * S * p.s);
 }
 
 // Boris pusher (arbitrary B direction)
@@ -260,29 +359,3 @@ function borisStep(bhat) {
   pos.z += vel.z;
 }
 
-function drawBArrow(bhat) {
-  const ab = getArrowBase();
-  const baseX = ab.x;
-  const baseY = ab.y;
-  const L = 20 * S;
-
-  stroke(...colPrimary, 160);
-  strokeWeight(2 * S);
-
-  const tipX = baseX + bhat.x * L;
-  const tipY = baseY + bhat.y * L;
-
-  line(baseX, baseY, tipX, tipY);
-
-  const nx = -bhat.y;
-  const ny = bhat.x;
-
-  line(tipX, tipY, tipX - bhat.x * 6 * S + nx * 4 * S, tipY - bhat.y * 6 * S + ny * 4 * S);
-  line(tipX, tipY, tipX - bhat.x * 6 * S - nx * 4 * S, tipY - bhat.y * 6 * S - ny * 4 * S);
-
-  noStroke();
-  fill(...colPrimary, 200);
-  textSize(12 * S);
-  textAlign(RIGHT, CENTER);
-  text("B", baseX + 30 * S, baseY + 25 * S);
-}
