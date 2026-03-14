@@ -8,8 +8,8 @@ dependencies = [
     "h5py",
     "matplotlib",
     "numpy",
+    "scipy",
     "ruff",
-    "h5py",
     "f90nml",
     "pre-commit",
     "dask"
