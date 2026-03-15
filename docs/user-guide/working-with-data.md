@@ -33,6 +33,14 @@ ts_first = dpy.timestep_index(0)   # First timestep
 ts_last = dpy.timestep_index(-1)   # Last timestep
 ```
 
+### By Closest Match
+
+```python
+# Access the closest available timestep to a target
+ts = dpy.timestep_closest(100, verbose=True)
+# INFO: Requested timestep: 100. Closest available timestep: 96.
+```
+
 ### Get All Timesteps
 
 ```python

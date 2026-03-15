@@ -57,13 +57,13 @@ print(ts.phases)
 
 ---
 
-### `timestep_closest(index: int, verbose: bool = False) -> Timestep`
+### `timestep_closest(ts: int, verbose: bool = False) -> Timestep`
 
 Access field, phase, and raw file information at the closest available timestep.
 
 **Parameters:**
 
-- `index` (`int`): The index at which to find the closest available timestep
+- `ts` (`int`): The target timestep number to find the closest match for
 - `verbose` (`bool`): If `True`, logs information about the requested and closest available timesteps
 
 **Returns:** `Timestep` object

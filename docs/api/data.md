@@ -445,7 +445,7 @@ A tuple of two numpy arrays:
 
 | Data Dimension | Method |
 |----------------|--------|
-| 1D | 1D FFT, positive frequencies only |
+| 1D | 1D FFT with radial binning |
 | 2D | 2D FFT with radial averaging for isotropic spectrum |
 | 3D | 3D FFT with radial averaging for isotropic spectrum |
 

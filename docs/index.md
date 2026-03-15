@@ -10,8 +10,10 @@
 
 ## Features
 
-- **Easy Data Access**: Efficiently access simulation input data and output data like timesteps, fields (e.g., magnetic field), and phases (e.g., distribution functions).
+- **Easy Data Access**: Efficiently access simulation input data and output data like timesteps, fields (e.g., magnetic field), phases (e.g., distribution functions), and particle tracks.
 - **Quick Visualization**: Plot 1D, 2D, and 3D output data with a single method call.
+- **Spectral Analysis**: Compute isotropic and directional FFT power spectra, plus 1D spatial averages with statistics.
+- **Particle Tracks**: Follow individual particle trajectories, momenta, and local field values across a simulation.
 - **Lazy Loading**: Handle large datasets efficiently using [Dask](https://dask.org/) for lazy loading.
 - **Flexible API**: Perform arithmetic operations on data objects directly.
 

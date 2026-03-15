@@ -28,29 +28,46 @@ class Track(
 
 ### Properties
 
-All properties return `np.ndarray` (or `dask.array.Array` if lazy loading is enabled).
+All properties return `np.ndarray` (or `dask.array.Array` if lazy loading is enabled). The suffixes 1, 2, 3 correspond to the x, y, z directions.
 
 #### Position
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `x1` | `np.ndarray` | X coordinate over time |
-| `x2` | `np.ndarray` | Y coordinate over time |
-| `x3` | `np.ndarray` | Z coordinate over time |
+| Property | Description |
+|----------|-------------|
+| `x1` | X coordinate over time |
+| `x2` | Y coordinate over time |
+| `x3` | Z coordinate over time |
 
-#### Momentum
+#### Velocity
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `p1` | `np.ndarray` | X momentum over time |
-| `p2` | `np.ndarray` | Y momentum over time |
-| `p3` | `np.ndarray` | Z momentum over time |
+| Property | Description |
+|----------|-------------|
+| `v1` | X velocity over time |
+| `v2` | Y velocity over time |
+| `v3` | Z velocity over time |
 
-#### Time
+#### Electromagnetic Fields
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `t` | `np.ndarray` | Time array |
+| Property | Description |
+|----------|-------------|
+| `B1` | X magnetic field at particle position over time |
+| `B2` | Y magnetic field at particle position over time |
+| `B3` | Z magnetic field at particle position over time |
+| `E1` | X electric field at particle position over time |
+| `E2` | Y electric field at particle position over time |
+| `E3` | Z electric field at particle position over time |
+
+#### Other
+
+| Property | Description |
+|----------|-------------|
+| `t` | Simulation time |
+| `n` | Iteration number at which each value was stored (e.g., `[10, 20, 30, ...]`) |
+| `ene` | Particle energy over time |
+| `q` | Particle charge |
+
+!!! note
+    The `n` array reflects the simulation iteration numbers at which data was recorded, controlled by the `track_nstore` parameter in the input file. For example, `track_nstore=10` means values are stored every 10 iterations.
 
 ### Example
 
@@ -58,7 +75,17 @@ All properties return `np.ndarray` (or `dask.array.Array` if lazy loading is ena
 track = dpy.track('0-1465')
 
 # Get trajectory
-x, y, z = track.x1, track.x2, track.x3
+x, y = track.x1, track.x2
+
+# Get fields at particle position over time
+Bx, By, Bz = track.B1, track.B2, track.B3
+
+# Get time and energy
+t = track.t
+ene = track.ene
+
+# Get iteration numbers
+n = track.n  # e.g., [10, 20, 30, ...]
 ```
 
 ---

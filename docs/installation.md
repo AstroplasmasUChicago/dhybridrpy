@@ -47,7 +47,7 @@ print(dhybridrpy.__all__)
 This should output:
 
 ```
-['DHybridrpy', 'Timestep', 'Field', 'Phase', 'Raw']
+['DHybridrpy', 'Timestep', 'Field', 'Phase', 'Raw', 'Track', 'TrackCollection', 'fft_power_iso', 'fft_power_1d_slices']
 ```
 
 ## Upgrading

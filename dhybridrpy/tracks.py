@@ -80,19 +80,69 @@ class Track:
         return self._load_dataset('x3')
 
     @property
-    def p1(self) -> Union[np.ndarray, da.Array]:
-        """X component of momentum over time."""
-        return self._load_dataset('p1')
+    def v1(self) -> Union[np.ndarray, da.Array]:
+        """X component of velocity over time."""
+        return self._load_dataset('v1')
 
     @property
-    def p2(self) -> Union[np.ndarray, da.Array]:
-        """Y component of momentum over time."""
-        return self._load_dataset('p2')
+    def v2(self) -> Union[np.ndarray, da.Array]:
+        """Y component of velocity over time."""
+        return self._load_dataset('v2')
 
     @property
-    def p3(self) -> Union[np.ndarray, da.Array]:
-        """Z component of momentum over time."""
-        return self._load_dataset('p3')
+    def v3(self) -> Union[np.ndarray, da.Array]:
+        """Z component of velocity over time."""
+        return self._load_dataset('v3')
+
+    @property
+    def B1(self) -> Union[np.ndarray, da.Array]:
+        """X magnetic field at particle position over time."""
+        return self._load_dataset('B1')
+
+    @property
+    def B2(self) -> Union[np.ndarray, da.Array]:
+        """Y magnetic field at particle position over time."""
+        return self._load_dataset('B2')
+
+    @property
+    def B3(self) -> Union[np.ndarray, da.Array]:
+        """Z magnetic field at particle position over time."""
+        return self._load_dataset('B3')
+
+    @property
+    def E1(self) -> Union[np.ndarray, da.Array]:
+        """X electric field at particle position over time."""
+        return self._load_dataset('E1')
+
+    @property
+    def E2(self) -> Union[np.ndarray, da.Array]:
+        """Y electric field at particle position over time."""
+        return self._load_dataset('E2')
+
+    @property
+    def E3(self) -> Union[np.ndarray, da.Array]:
+        """Z electric field at particle position over time."""
+        return self._load_dataset('E3')
+
+    @property
+    def t(self) -> Union[np.ndarray, da.Array]:
+        """Simulation time."""
+        return self._load_dataset('t')
+
+    @property
+    def n(self) -> Union[np.ndarray, da.Array]:
+        """Iteration number at which each value was stored."""
+        return self._load_dataset('n')
+
+    @property
+    def ene(self) -> Union[np.ndarray, da.Array]:
+        """Particle energy over time."""
+        return self._load_dataset('ene')
+
+    @property
+    def q(self) -> Union[np.ndarray, da.Array]:
+        """Particle charge."""
+        return self._load_dataset('q')
 
     def __getattr__(self, name: str) -> Union[np.ndarray, da.Array]:
         """Allow access to any dataset in the track file."""
