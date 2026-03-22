@@ -30,8 +30,8 @@ class DHybridrpy(
 | `output_folder` | `str` | Path to the output folder |
 | `lazy` | `bool` | Whether lazy loading is enabled |
 | `inputs` | `Namelist` | Parsed input file as a dictionary-like object |
-| `dt` | `float` | Simulation timestep size |
-| `start_time` | `float` | Simulation start time |
+| `dt` | `float` | Simulation timestep size (from input file) |
+| `start_time` | `float` | Simulation start time (from input file) |
 
 ## Methods
 

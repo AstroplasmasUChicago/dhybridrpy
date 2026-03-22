@@ -1,10 +1,10 @@
 import io
 import logging
-import math
 import os
 import re
 
 import f90nml
+import h5py
 import numpy as np
 from f90nml import Namelist
 
@@ -103,6 +103,7 @@ class DHybridrpy:
         self._timesteps_dict = {}
         self._sorted_timesteps = None
         self._track_collections: dict = {}  # {species: TrackCollection}
+        self._timestep_times: dict = {}  # {timestep: float} cache of TIME from HDF5
         self._validate_paths()
         self.inputs = InputFileParser(input_file).input_dict
         self._get_time_inputs()
@@ -125,6 +126,13 @@ class DHybridrpy:
             raise NotADirectoryError(
                 f"Output folder {self.output_folder} is not a directory."
             )
+
+    def _get_time_from_h5(self, filepath: str, timestep: int) -> float:
+        """Read the TIME attribute from an HDF5 file, caching per timestep."""
+        if timestep not in self._timestep_times:
+            with h5py.File(filepath, "r") as f:
+                self._timestep_times[timestep] = float(f.attrs["TIME"][0])
+        return self._timestep_times[timestep]
 
     def _process_file(self, dirpath: str, filename: str, timestep: int) -> None:
         folder_components = os.path.relpath(dirpath, self.output_folder).split(os.sep)
@@ -161,10 +169,11 @@ class DHybridrpy:
         self._FIELD_NAMES.add(name)
         if timestep not in self._timesteps_dict:
             self._timesteps_dict[timestep] = Timestep(timestep)
-        time = timestep * self.dt + self.start_time
-        time_ndecimals = max(0, math.ceil(-math.log10(self.dt)) + 1)
+        filepath = os.path.join(dirpath, filename)
+        time = self._get_time_from_h5(filepath, timestep)
+        time_ndecimals = 6
         field = Field(
-            os.path.join(dirpath, filename),
+            filepath,
             name,
             timestep,
             time,
@@ -204,10 +213,11 @@ class DHybridrpy:
         )
         if timestep not in self._timesteps_dict:
             self._timesteps_dict[timestep] = Timestep(timestep)
-        time = timestep * self.dt + self.start_time
-        time_ndecimals = max(0, math.ceil(-math.log10(self.dt)) + 1)
+        filepath = os.path.join(dirpath, filename)
+        time = self._get_time_from_h5(filepath, timestep)
+        time_ndecimals = 6
         phase = Phase(
-            os.path.join(dirpath, filename),
+            filepath,
             name,
             timestep,
             time,
@@ -225,10 +235,9 @@ class DHybridrpy:
         species = int(self._SPECIES_PATTERN.search(species_str).group())
         if timestep not in self._timesteps_dict:
             self._timesteps_dict[timestep] = Timestep(timestep)
-        time = timestep * self.dt + self.start_time
-        raw = Raw(
-            os.path.join(dirpath, filename), name, timestep, time, self.lazy, species
-        )
+        filepath = os.path.join(dirpath, filename)
+        time = self._get_time_from_h5(filepath, timestep)
+        raw = Raw(filepath, name, timestep, time, self.lazy, species)
         self._timesteps_dict[timestep].add_raw(raw)
 
     def _traverse_directory(self) -> None:
