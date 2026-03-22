@@ -1216,15 +1216,15 @@ class Raw(BaseProperties):
         """Retrieve a dictionary of the raw file's keys and values."""
         if not self._data_dict:
             with h5py.File(self.file_path, "r") as file:
-
-                def dict_helper():
-                    with h5py.File(self.file_path, "r") as f:
-                        return f[key][:]
-
                 for key in file.keys():
                     if self.lazy:
                         shape = file[key].shape
                         dtype = file[key].dtype
+
+                        def dict_helper(key=key):
+                            with h5py.File(self.file_path, "r") as f:
+                                return f[key][:]
+
                         delayed_helper = delayed(dict_helper)()
                         self._data_dict[key] = da.from_delayed(
                             delayed_helper, shape=shape, dtype=dtype
