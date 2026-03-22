@@ -117,6 +117,22 @@ print(f"Available: {all_timesteps}")
 print(f"First: {all_timesteps[0]}, Last: {all_timesteps[-1]}")
 ```
 
+---
+
+### `times() -> np.ndarray`
+
+Retrieve an array of simulation times corresponding to each timestep. Times are read from the HDF5 file `TIME` attribute.
+
+**Returns:** NumPy array of simulation times (sorted by timestep)
+
+**Example:**
+
+```python
+times = dpy.times()
+print(f"Simulation times: {times}")
+print(f"Start: {times[0]}, End: {times[-1]}")
+```
+
 ## Usage Examples
 
 ### Basic Initialization

@@ -292,6 +292,10 @@ class DHybridrpy:
             return self._sorted_timesteps[1:]
         return self._sorted_timesteps
 
+    def times(self) -> np.ndarray:
+        """Retrieve an array of simulation times corresponding to each timestep."""
+        return np.array([self._timestep_times[ts] for ts in self.timesteps()])
+
     def _discover_tracks(self) -> None:
         """Discover track files in the output folder."""
 
