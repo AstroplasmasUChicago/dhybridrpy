@@ -27,7 +27,7 @@ class Field(
 | `file_path` | `str` | Path to the HDF5 file |
 | `name` | `str` | Field name (e.g., "Bx", "Ey") |
 | `timestep` | `int` | Timestep number |
-| `time` | `float` | Simulation time |
+| `time` | `float` | Simulation time (read from the HDF5 file's `TIME` attribute) |
 | `lazy` | `bool` | Whether lazy loading is enabled |
 | `type` | `str` | Field type: "Total", "External", or "Self" |
 
@@ -82,7 +82,7 @@ class Phase(
 | `file_path` | `str` | Path to the HDF5 file |
 | `name` | `str` | Phase name (e.g., "x2x1", "Vx") |
 | `timestep` | `int` | Timestep number |
-| `time` | `float` | Simulation time |
+| `time` | `float` | Simulation time (read from the HDF5 file's `TIME` attribute) |
 | `lazy` | `bool` | Whether lazy loading is enabled |
 | `species` | `int` or `str` | Species identifier (1, 2, ... or "Total") |
 
@@ -126,7 +126,7 @@ class Raw(
 | `file_path` | `str` | Path to the HDF5 file |
 | `name` | `str` | Always "raw" |
 | `timestep` | `int` | Timestep number |
-| `time` | `float` | Simulation time |
+| `time` | `float` | Simulation time (read from the HDF5 file's `TIME` attribute) |
 | `lazy` | `bool` | Whether lazy loading is enabled |
 | `species` | `int` | Species number |
 
