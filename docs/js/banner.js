@@ -22,14 +22,14 @@ const TEXT_Z = 0; // text sits at z = 0
 
 // ---------- Tunables ----------
 const TRAIL_LIFE = 80;
-const SMOOTHING = 0.08;
+const SMOOTHING = 0.1;
+const NUM_PARTICLES = 1;
 
 let rL = 0.5;
 let vPar = 0.5;
 
 // ---------- State ----------
-let pos, vel;
-let trail = [];
+let particles = [];
 let useTrail = true;
 let bhatSmooth = { x: Math.cos(Math.PI / 4), y: Math.sin(Math.PI / 4), z: 0 };
 
@@ -82,10 +82,17 @@ function sizeCanvas() {
 }
 
 function initPhysics() {
-  pos = { x: 0, y: getLineY() + rL, z: 0 };
-  vel = { x: vPar, y: 0, z: 0 };
-  vel.z = rL * QM_RATIO * B0;
-  trail = [];
+  particles = [];
+  for (let i = 0; i < NUM_PARTICLES; i++) {
+    const offsetX = (i / NUM_PARTICLES) * W;
+    const offsetY = getLineY() + rL + (i - (NUM_PARTICLES - 1) / 2) * 20 * S;
+    const p = {
+      pos: { x: offsetX, y: offsetY, z: i * 40 * S },
+      vel: { x: vPar, y: 0, z: rL * QM_RATIO * B0 },
+      trail: []
+    };
+    particles.push(p);
+  }
 }
 
 function setup() {
@@ -103,11 +110,13 @@ function windowResized() {
   const oldW = W;
   sizeCanvas();
   resizeCanvas(W, H);
-  // rescale particle position proportionally
+  // rescale particle positions proportionally
   if (oldW > 0) {
     const r = W / oldW;
-    pos.x *= r;
-    pos.y *= r;
+    for (const pt of particles) {
+      pt.pos.x *= r;
+      pt.pos.y *= r;
+    }
   }
 }
 
@@ -117,19 +126,25 @@ function draw() {
 
   const bhat = getBhat();
 
-  borisStep(bhat);
-  wrapAllDirections();
-  updateTrail();
+  for (const pt of particles) {
+    borisStep(pt, bhat);
+    wrapParticle(pt);
+    updateTrail(pt);
+  }
 
   // Behind text (z > TEXT_Z = farther from camera)
-  drawTrailLayer(TEXT_Z, Infinity);
-  if (pos.z > TEXT_Z) drawParticleDot();
+  for (const pt of particles) {
+    drawTrailLayer(pt, TEXT_Z, Infinity);
+    if (pt.pos.z > TEXT_Z) drawParticleDot(pt);
+  }
 
   drawTitle();
 
   // In front of text (z <= TEXT_Z)
-  drawTrailLayer(-Infinity, TEXT_Z);
-  if (pos.z <= TEXT_Z) drawParticleDot();
+  for (const pt of particles) {
+    drawTrailLayer(pt, -Infinity, TEXT_Z);
+    if (pt.pos.z <= TEXT_Z) drawParticleDot(pt);
+  }
 
   drawBIndicator(bhat);
 }
@@ -171,10 +186,12 @@ function drawTitle() {
   text("A Python package to easily read input + output data from dHybridR.", 22 * S, 104 * S);
 }
 
-// Field points along the line from banner center -> mouse
+// Field points along the line from arrow indicator -> mouse
 function getBhat() {
-  const dx = mouseX - W * 0.5;
-  const dy = mouseY - H * 0.5;
+  const cx = W - 10 * S;
+  const cy = H - 5 * S;
+  const dx = mouseX - cx;
+  const dy = mouseY - cy;
   const mag = Math.hypot(dx, dy);
 
   let target;
@@ -196,42 +213,42 @@ function getBhat() {
   return { x: bhatSmooth.x, y: bhatSmooth.y, z: 0 };
 }
 
-function wrapAllDirections() {
+function wrapParticle(pt) {
   let wrapped = false;
 
   // X wrap
-  if (pos.x > W) { pos.x = 0; wrapped = true; }
-  else if (pos.x < 0) { pos.x = W; wrapped = true; }
+  if (pt.pos.x > W) { pt.pos.x = 0; wrapped = true; }
+  else if (pt.pos.x < 0) { pt.pos.x = W; wrapped = true; }
 
   // Y wrap
-  if (pos.y > H) { pos.y = 0; wrapped = true; }
-  else if (pos.y < 0) { pos.y = H; wrapped = true; }
+  if (pt.pos.y > H) { pt.pos.y = 0; wrapped = true; }
+  else if (pt.pos.y < 0) { pt.pos.y = H; wrapped = true; }
 
   // Z wrap, keep depth within a visible range
   const Z_MAX = FOV * S * 3.0;
-  if (pos.z > Z_MAX) { pos.z -= 2 * Z_MAX; wrapped = true; }
-  else if (pos.z < -Z_MAX) { pos.z += 2 * Z_MAX; wrapped = true; }
+  if (pt.pos.z > Z_MAX) { pt.pos.z -= 2 * Z_MAX; wrapped = true; }
+  else if (pt.pos.z < -Z_MAX) { pt.pos.z += 2 * Z_MAX; wrapped = true; }
 
   // Break trail so we don't draw a diagonal across the banner
-  if (wrapped && useTrail) trail.push(null);
+  if (wrapped && useTrail) pt.trail.push(null);
 }
 
-function updateTrail() {
+function updateTrail(pt) {
   if (!useTrail) {
-    trail.length = 0;
+    pt.trail.length = 0;
     return;
   }
 
-  trail.push({ x: pos.x, y: pos.y, z: pos.z, age: 0 });
+  pt.trail.push({ x: pt.pos.x, y: pt.pos.y, z: pt.pos.z, age: 0 });
 
-  for (let p of trail) {
+  for (let p of pt.trail) {
     if (p !== null) p.age++;
   }
 
-  trail = trail.filter((p) => p === null || p.age < TRAIL_LIFE);
+  pt.trail = pt.trail.filter((p) => p === null || p.age < TRAIL_LIFE);
 }
 
-function drawTrailLayer(zMin, zMax) {
+function drawTrailLayer(pt, zMin, zMax) {
   if (!useTrail) return;
 
   noFill();
@@ -239,7 +256,7 @@ function drawTrailLayer(zMin, zMax) {
   // Collect runs of non-null points
   const runs = [];
   let run = [];
-  for (const p of trail) {
+  for (const p of pt.trail) {
     if (p === null) {
       if (run.length > 1) runs.push(run);
       run = [];
@@ -303,9 +320,9 @@ function edgeFade(px, py, pz) {
   return constrain(Math.min(fx, fy, fz), 0, 1);
 }
 
-function drawParticleDot() {
-  const p = project(pos.x, pos.y, pos.z);
-  const fade = edgeFade(pos.x, pos.y, pos.z);
+function drawParticleDot(pt) {
+  const p = project(pt.pos.x, pt.pos.y, pt.pos.z);
+  const fade = edgeFade(pt.pos.x, pt.pos.y, pt.pos.z);
 
   noStroke();
   fill(...colPrimary, 70 * p.s * fade);
@@ -316,13 +333,13 @@ function drawParticleDot() {
 }
 
 // Boris pusher (arbitrary B direction)
-function borisStep(bhat) {
+function borisStep(pt, bhat) {
   const B = { x: B0 * bhat.x, y: B0 * bhat.y, z: B0 * bhat.z };
 
   const vMinus = {
-    x: vel.x + QM_RATIO * E.x * DT * 0.5,
-    y: vel.y + QM_RATIO * E.y * DT * 0.5,
-    z: vel.z + QM_RATIO * E.z * DT * 0.5
+    x: pt.vel.x + QM_RATIO * E.x * DT * 0.5,
+    y: pt.vel.y + QM_RATIO * E.y * DT * 0.5,
+    z: pt.vel.z + QM_RATIO * E.z * DT * 0.5
   };
 
   const t = {
@@ -350,12 +367,12 @@ function borisStep(bhat) {
     z: vMinus.z + (vPrime.x * s.y - vPrime.y * s.x)
   };
 
-  vel.x = vPlus.x + QM_RATIO * E.x * DT * 0.5;
-  vel.y = vPlus.y + QM_RATIO * E.y * DT * 0.5;
-  vel.z = vPlus.z + QM_RATIO * E.z * DT * 0.5;
+  pt.vel.x = vPlus.x + QM_RATIO * E.x * DT * 0.5;
+  pt.vel.y = vPlus.y + QM_RATIO * E.y * DT * 0.5;
+  pt.vel.z = vPlus.z + QM_RATIO * E.z * DT * 0.5;
 
-  pos.x += vel.x;
-  pos.y += vel.y;
-  pos.z += vel.z;
+  pt.pos.x += pt.vel.x;
+  pt.pos.y += pt.vel.y;
+  pt.pos.z += pt.vel.z;
 }
 
