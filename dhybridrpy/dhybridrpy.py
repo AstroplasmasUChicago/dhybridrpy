@@ -101,9 +101,11 @@ class DHybridrpy:
         self._FIELD_NAMES = set()
         self._PHASE_NAMES = set()
         self._timesteps_dict = {}
-        self._sorted_timesteps = None
-        self._track_collections: dict = {}  # {species: TrackCollection}
-        self._timestep_times: dict = {}  # {timestep: float} cache of TIME from HDF5
+        self._sorted_timesteps_cache = {}
+        self._field_phase_timesteps = set()
+        self._raw_timesteps = set()
+        self._track_collections= {}  # {species: TrackCollection}
+        self._timestep_times = {}  # {timestep: float} cache of TIME from HDF5
         self._validate_paths()
         self.inputs = InputFileParser(input_file).input_dict
         self._get_time_inputs()
@@ -169,6 +171,7 @@ class DHybridrpy:
         self._FIELD_NAMES.add(name)
         if timestep not in self._timesteps_dict:
             self._timesteps_dict[timestep] = Timestep(timestep)
+        self._field_phase_timesteps.add(timestep)
         filepath = os.path.join(dirpath, filename)
         time = self._get_time_from_h5(filepath, timestep)
         time_ndecimals = 6
@@ -213,6 +216,7 @@ class DHybridrpy:
         )
         if timestep not in self._timesteps_dict:
             self._timesteps_dict[timestep] = Timestep(timestep)
+        self._field_phase_timesteps.add(timestep)
         filepath = os.path.join(dirpath, filename)
         time = self._get_time_from_h5(filepath, timestep)
         time_ndecimals = 6
@@ -235,6 +239,7 @@ class DHybridrpy:
         species = int(self._SPECIES_PATTERN.search(species_str).group())
         if timestep not in self._timesteps_dict:
             self._timesteps_dict[timestep] = Timestep(timestep)
+        self._raw_timesteps.add(timestep)
         filepath = os.path.join(dirpath, filename)
         time = self._get_time_from_h5(filepath, timestep)
         raw = Raw(filepath, name, timestep, time, self.lazy, species)
@@ -280,21 +285,38 @@ class DHybridrpy:
         )
 
     def timesteps(self) -> np.ndarray:
-        """Retrieve an array of the timesteps."""
-
-        if self._sorted_timesteps is None:
-            self._sorted_timesteps = np.sort(list(self._timesteps_dict))
+        """Retrieve an array of the timesteps for fields and phases."""
+        if "field_phase" not in self._sorted_timesteps_cache:
+            self._sorted_timesteps_cache["field_phase"] = np.sort(list(self._field_phase_timesteps))
+        sorted_ts = self._sorted_timesteps_cache["field_phase"]
         if (
             self.exclude_timestep_zero
-            and len(self._sorted_timesteps) > 0
-            and self._sorted_timesteps[0] == 0
+            and len(sorted_ts) > 0
+            and sorted_ts[0] == 0
         ):
-            return self._sorted_timesteps[1:]
-        return self._sorted_timesteps
+            return sorted_ts[1:]
+        return sorted_ts
 
     def times(self) -> np.ndarray:
-        """Retrieve an array of simulation times corresponding to each timestep."""
+        """Retrieve an array of simulation times corresponding to each field/phase timestep."""
         return np.array([self._timestep_times[ts] for ts in self.timesteps()])
+
+    def raw_timesteps(self) -> np.ndarray:
+        """Retrieve an array of the timesteps for raw particle data."""
+        if "raw" not in self._sorted_timesteps_cache:
+            self._sorted_timesteps_cache["raw"] = np.sort(list(self._raw_timesteps))
+        sorted_ts = self._sorted_timesteps_cache["raw"]
+        if (
+            self.exclude_timestep_zero
+            and len(sorted_ts) > 0
+            and sorted_ts[0] == 0
+        ):
+            return sorted_ts[1:]
+        return sorted_ts
+
+    def raw_times(self) -> np.ndarray:
+        """Retrieve an array of simulation times corresponding to each raw timestep."""
+        return np.array([self._timestep_times[ts] for ts in self.raw_timesteps()])
 
     def _discover_tracks(self) -> None:
         """Discover track files in the output folder."""
