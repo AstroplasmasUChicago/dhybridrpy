@@ -105,9 +105,9 @@ ts_last = dpy.timestep_index(-1)
 
 ### `timesteps() -> np.ndarray`
 
-Retrieve an array of all available timesteps.
+Retrieve an array of available timesteps for fields and phases. Raw particle data may be dumped at different intervals; use [`raw_timesteps()`](#raw_timesteps---npndarray) to get those.
 
-**Returns:** NumPy array of timestep numbers (sorted)
+**Returns:** NumPy array of field/phase timestep numbers (sorted)
 
 **Example:**
 
@@ -121,7 +121,7 @@ print(f"First: {all_timesteps[0]}, Last: {all_timesteps[-1]}")
 
 ### `times() -> np.ndarray`
 
-Retrieve an array of simulation times corresponding to each timestep. Times are read from the HDF5 file `TIME` attribute.
+Retrieve an array of simulation times corresponding to each field/phase timestep. Times are read from the HDF5 file `TIME` attribute.
 
 **Returns:** NumPy array of simulation times (sorted by timestep)
 
@@ -131,6 +131,38 @@ Retrieve an array of simulation times corresponding to each timestep. Times are 
 times = dpy.times()
 print(f"Simulation times: {times}")
 print(f"Start: {times[0]}, End: {times[-1]}")
+```
+
+---
+
+### `raw_timesteps() -> np.ndarray`
+
+Retrieve an array of available timesteps for raw particle data. Raw files may be dumped at different intervals than fields and phases.
+
+**Returns:** NumPy array of raw timestep numbers (sorted)
+
+**Example:**
+
+```python
+raw_ts = dpy.raw_timesteps()
+print(f"Raw timesteps: {raw_ts}")
+print(f"First: {raw_ts[0]}, Last: {raw_ts[-1]}")
+```
+
+---
+
+### `raw_times() -> np.ndarray`
+
+Retrieve an array of simulation times corresponding to each raw particle timestep. Times are read from the HDF5 file `TIME` attribute.
+
+**Returns:** NumPy array of simulation times (sorted by raw timestep)
+
+**Example:**
+
+```python
+raw_times = dpy.raw_times()
+print(f"Raw simulation times: {raw_times}")
+print(f"Start: {raw_times[0]}, End: {raw_times[-1]}")
 ```
 
 ## Usage Examples
