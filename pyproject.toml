@@ -12,12 +12,16 @@ dependencies = [
     "h5py",
     "f90nml",
     "pre-commit",
-    "dask"
+    "dask",
+    "typer>=0.20.1",
 ]
 license = {file = "LICENSE.txt"}
 
 [project.urls]
 Homepage = "https://github.com/AstroplasmasUChicago/dhybridrpy"
+
+[project.scripts]
+dplot = "dhybridrpy.__main__:main"
 
 [build-system]
 requires = ["setuptools>=42", "wheel"]
