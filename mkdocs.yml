@@ -65,6 +65,7 @@ nav:
     - Particle Tracks: user-guide/particle-tracks.md
     - Plotting: user-guide/plotting.md
     - Lazy Loading: user-guide/lazy-loading.md
+    - CLI Tool (dplot): user-guide/dplot.md
   - API Reference:
     - DHybridrpy: api/dhybridrpy.md
     - Timestep: api/timestep.md

@@ -1,0 +1,205 @@
+# CLI Tool: dplot
+
+`dplot` is a command-line tool that ships with dhybridrpy for visualizing dHybridR simulation fields and phases across all timesteps. It saves PNG images for every timestep and can optionally combine them into MP4 videos.
+
+## Installation
+
+`dplot` is included automatically when you install dhybridrpy:
+
+```bash
+pip install dhybridrpy
+```
+
+No additional setup is needed. For video output, you also need `ffmpeg` installed on your system (see [Requirements](#requirements)).
+
+## Discovery Mode
+
+Run `dplot` without specifying any fields or phases to see what data is available in your simulation:
+
+```bash
+dplot -i path/to/input
+```
+
+This prints all available fields (grouped by type), phases (grouped by species), and the number of timesteps:
+
+```
+Fields:
+  type=Total: Bx, By, Bz, Ex, Ey, Ez, Jx, Jy, Jz
+  type=External: Bx, By, Bz
+  type=Self: Bx, By, Bz
+
+Phases:
+  species=1: p1x1, p2x1, x2x1
+  species=2: p1x1, p2x1, x2x1
+
+Timesteps: 50 (1 to 50)
+```
+
+## Plotting Fields
+
+Use `--fields` to plot specific field components. Repeat the flag for multiple fields:
+
+```bash
+# Plot a single field
+dplot -i path/to/input --fields Bx
+
+# Plot multiple fields
+dplot -i path/to/input --fields Bx --fields By --fields Bz
+```
+
+By default, `Total` fields are plotted. Use `--type` to select a different field type:
+
+```bash
+dplot -i path/to/input --fields Bx --type External
+dplot -i path/to/input --fields Bx --type Self
+```
+
+### Plot All Fields
+
+Use `--all-fields` to plot every field component available for the selected type:
+
+```bash
+dplot -i path/to/input --all-fields
+dplot -i path/to/input --all-fields --type Self
+```
+
+## Plotting Phases
+
+Use `--phases` to plot phase-space distributions. Use `--species` to select which species to include:
+
+```bash
+# Plot a phase for all available species
+dplot -i path/to/input --phases p1x1
+
+# Plot a phase for specific species
+dplot -i path/to/input --phases p1x1 --species 1 --species 3
+
+# Plot multiple phases
+dplot -i path/to/input --phases p1x1 --phases x2x1 --species 2
+```
+
+If `--species` is not specified, all available species are plotted.
+
+### Plot All Phases
+
+Use `--all-phases` to plot every available phase-space distribution:
+
+```bash
+dplot -i path/to/input --all-phases
+dplot -i path/to/input --all-phases --species 1
+```
+
+## Creating Videos
+
+Add `--video` to combine the saved PNGs into an MP4 video using ffmpeg:
+
+```bash
+dplot -i path/to/input --fields Bx --video
+dplot -i path/to/input --all-fields --video --fps 15
+```
+
+The video is saved alongside the PNGs in each field/phase subdirectory.
+
+## Output Directory Structure
+
+By default, plots are saved under a `plots/` directory. The structure mirrors the data hierarchy:
+
+```
+plots/
+├── Fields/
+│   ├── Bx/
+│   │   ├── Bx_000001.png
+│   │   ├── Bx_000002.png
+│   │   ├── ...
+│   │   └── Bx.mp4          # if --video is used
+│   └── By/
+│       ├── By_000001.png
+│       └── ...
+└── Phases/
+    ├── p1x1_Sp01/
+    │   ├── p1x1_Sp01_000001.png
+    │   └── ...
+    └── p1x1_Sp03/
+        ├── p1x1_Sp03_000001.png
+        └── ...
+```
+
+Use `--plots-dir` to change the base output directory:
+
+```bash
+dplot -i path/to/input --fields Bx --plots-dir my_plots
+```
+
+## Color Scale
+
+`dplot` automatically determines a consistent color range across all timesteps by sampling ~10 equally spaced frames. You can override this with explicit limits:
+
+```bash
+# Set both limits
+dplot -i path/to/input --fields Bx --vmin -1.0 --vmax 1.0
+
+# Set only one limit (the other is auto-computed)
+dplot -i path/to/input --fields Bx --vmin 0
+```
+
+## CLI Options Reference
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--input` | `-i` | `input/input` | Path to the dHybridR input file. |
+| `--output` | `-o` | `Output` | Path to the simulation output folder. |
+| `--fields` | | | Field names to plot. Repeat for multiple (e.g. `--fields Bx --fields By`). |
+| `--phases` | | | Phase names to plot. Repeat for multiple (e.g. `--phases p1x1 --phases x2x1`). |
+| `--all-fields` | | `False` | Plot all available fields for the selected type. |
+| `--all-phases` | | `False` | Plot all available phase-space distributions. |
+| `--type` | | `Total` | Field type: `Total`, `External`, or `Self`. |
+| `--species` | | all | Species numbers for phases. Repeat for multiple (e.g. `--species 1 --species 3`). |
+| `--video` | | `False` | Create an MP4 video from the saved PNGs using ffmpeg. |
+| `--fps` | | `10` | Video framerate (frames per second). |
+| `--colormap` | `-c` | `viridis` | Matplotlib colormap name. |
+| `--dpi` | | `150` | Plot resolution in dots per inch. |
+| `--vmin` | | auto | Fixed color scale minimum. |
+| `--vmax` | | auto | Fixed color scale maximum. |
+| `--plots-dir` | | `plots` | Base output directory for saved plots. |
+
+## Examples
+
+### Full workflow: discover, plot, and create video
+
+```bash
+# 1. See what's available
+dplot -i sim/input
+
+# 2. Plot magnetic field components with a diverging colormap
+dplot -i sim/input --fields Bx --fields By --fields Bz \
+    --colormap RdBu --dpi 200
+
+# 3. Plot all phases for species 1 with video
+dplot -i sim/input --all-phases --species 1 --video --fps 15
+
+# 4. Plot everything with videos
+dplot -i sim/input --all-fields --all-phases --video
+```
+
+### Custom output and input paths
+
+```bash
+dplot -i experiments/run42/input -o experiments/run42/Output \
+    --fields Bx --plots-dir experiments/run42/figures
+```
+
+## Requirements
+
+- **Python packages**: All dependencies are installed with dhybridrpy (matplotlib, numpy, typer).
+- **ffmpeg**: Required only for `--video`. Install via your system package manager:
+
+```bash
+# Ubuntu/Debian
+sudo apt install ffmpeg
+
+# macOS (Homebrew)
+brew install ffmpeg
+
+# Conda
+conda install ffmpeg
+```

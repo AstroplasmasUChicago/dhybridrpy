@@ -53,18 +53,39 @@ plt.show()
 
 Further examples can be found in the `examples` folder and in the [online documentation](https://dhybridrpy.readthedocs.io/en/latest/examples/).
 
+## CLI Tool: dplot
+
+`dplot` is a command-line tool for visualizing dHybridR simulation fields and phases across all timesteps, saving PNG images and optionally creating MP4 videos. It is included when you install dhybridrpy.
+
+### Discover available data
+
+```bash
+dplot -i path/to/input
+```
+
+### Plot specific fields
+
+```bash
+dplot -i path/to/input --fields Bx --fields By
+```
+
+### Plot phase-space distributions
+
+```bash
+dplot -i path/to/input --phases p1x1 --species 3
+```
+
+### Plot all fields with video output
+
+```bash
+dplot -i path/to/input --all-fields --video
+```
+
+Key options: `--video`, `--fps`, `--colormap`, `--dpi`, `--vmin`/`--vmax`, `--type`, `--plots-dir`. See the [dplot documentation](https://dhybridrpy.readthedocs.io/en/latest/user-guide/dplot/) for full details.
+
 ## Documentation
 
 Full documentation is available at [dhybridrpy.readthedocs.io](https://dhybridrpy.readthedocs.io/en/latest/).
-
-## License
-
-Project licensed under the GNU Affero General Public License v3.0. See the [LICENSE](LICENSE) file for details.
-
-## Authors
-
-- Bricker Ostler
-- Miha Cernetic
 
 ## License
 
