@@ -204,6 +204,18 @@ def run(
 
     Run without --fields or --phases to see available data.
     """
+    if not os.path.isfile(input):
+        typer.echo(f"Error: '{input}' is not a valid file.", err=True)
+        typer.echo("Use -i/--input to specify the path to the input file.", err=True)
+        raise typer.Exit(1)
+
+    if not os.path.isdir(output):
+        typer.echo(f"Error: '{output}' is not a valid directory.", err=True)
+        typer.echo(
+            "Use -o/--output to specify the path to the output folder.", err=True
+        )
+        raise typer.Exit(1)
+
     try:
         dpy = DHybridrpy(input, output, exclude_timestep_zero=True)
     except (FileNotFoundError, NotADirectoryError) as e:
