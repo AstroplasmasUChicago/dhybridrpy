@@ -9,6 +9,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import typer
+from joblib import Parallel, delayed
 
 from .dhybridrpy import DHybridrpy
 from .data import Data
@@ -161,6 +162,88 @@ def print_available(dpy: DHybridrpy) -> None:
     typer.echo(f"\nTimesteps: {len(timesteps)} ({timesteps[0]} to {timesteps[-1]})")
 
 
+def _render_one_frame(frame_data, label, plot_dir, colormap, dpi, vmin, vmax):
+    """Render and save a single frame from pre-extracted data. Called by joblib."""
+    data, xdata, ydata, xlim, ylim, name, title, ts_num = frame_data
+    try:
+        fig, ax = plt.subplots(figsize=(10, 6), dpi=dpi)
+
+        needs_downsample = data.ndim == 2 and max(data.shape) > MAX_W
+
+        if data.ndim == 1 or not needs_downsample:
+            if data.ndim == 1:
+                ax.plot(xdata, data)
+                ax.set_xlabel("$x$")
+                ax.set_ylabel(name)
+                ax.set_xlim(xlim)
+            else:
+                X, Y = np.meshgrid(xdata, ydata, indexing="ij")
+                mesh = ax.pcolormesh(
+                    X, Y, data, cmap=colormap, shading="auto", vmin=vmin, vmax=vmax
+                )
+                xlabel, ylabel = Data._LABEL_MAPPINGS[name]
+                ax.set_xlabel(xlabel)
+                ax.set_ylabel(ylabel)
+                ax.set_xlim(xlim)
+                ax.set_ylim(ylim)
+                plt.colorbar(mesh, ax=ax, label=name)
+        else:
+            data, xdata, ydata = downsample(data, xdata, ydata)
+            X, Y = np.meshgrid(xdata, ydata, indexing="ij")
+            mesh = ax.pcolormesh(
+                X, Y, data, cmap=colormap, shading="auto", vmin=vmin, vmax=vmax
+            )
+            xlabel, ylabel = Data._LABEL_MAPPINGS[name]
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabel)
+            ax.set_xlim(xlim)
+            ax.set_ylim(ylim)
+            plt.colorbar(mesh, ax=ax, label=name)
+
+        ax.set_title(title)
+        filename = f"{label}_{ts_num:06d}.png"
+        fig.savefig(os.path.join(plot_dir, filename), bbox_inches="tight")
+    except OSError:
+        pass
+    finally:
+        plt.close(fig)
+
+
+def _extract_frame_data(dpy, get_data, ts_num):
+    """Extract picklable numpy arrays from a data object. Runs in main thread."""
+    try:
+        data_obj = get_data(dpy.timestep(ts_num))
+    except (AttributeError, ValueError, OSError):
+        return None
+
+    data = data_obj.data
+    if hasattr(data, "compute"):
+        data = data.compute()
+
+    xdata = data_obj.xdata
+    if hasattr(xdata, "compute"):
+        xdata = xdata.compute()
+
+    ydata = None
+    ylim = None
+    if data.ndim >= 2:
+        ydata = data_obj.ydata
+        if hasattr(ydata, "compute"):
+            ydata = ydata.compute()
+        ylim = data_obj.ylimdata
+
+    return (
+        data,
+        xdata,
+        ydata,
+        data_obj.xlimdata,
+        ylim,
+        data_obj.name,
+        data_obj._plot_title,
+        ts_num,
+    )
+
+
 def plot_data_series(
     dpy: DHybridrpy,
     get_data,
@@ -172,6 +255,7 @@ def plot_data_series(
     vmax: Optional[float],
     video: bool,
     fps: int,
+    jobs: int = -1,
 ) -> None:
     """Plot a data series across all timesteps and optionally create video."""
     os.makedirs(plot_dir, exist_ok=True)
@@ -186,24 +270,21 @@ def plot_data_series(
             vmax = auto_vmax
         typer.echo(f"  Color range: [{vmin:.4g}, {vmax:.4g}]")
 
-    # Plot each timestep
+    # Extract data in main thread (unpicklable dpy stays here)
+    frames = []
     for i, ts_num in enumerate(timesteps):
-        try:
-            data_obj = get_data(dpy.timestep(ts_num))
-        except (AttributeError, ValueError, OSError):
-            print_progress(f"  Plotting {label}", i + 1, len(timesteps))
-            continue
+        frame = _extract_frame_data(dpy, get_data, ts_num)
+        if frame is not None:
+            frames.append(frame)
+        print_progress(f"  Loading {label}", i + 1, len(timesteps))
 
-        try:
-            fig, ax = plt.subplots(figsize=(10, 6), dpi=dpi)
-            plot_frame(ax, data_obj, colormap, vmin, vmax)
-            filename = f"{label}_{ts_num:06d}.png"
-            fig.savefig(os.path.join(plot_dir, filename), bbox_inches="tight")
-        except OSError:
-            pass
-        finally:
-            plt.close(fig)
-        print_progress(f"  Plotting {label}", i + 1, len(timesteps))
+    # Render frames in parallel (only picklable numpy arrays cross process boundary)
+    verbose_level = 10 if getattr(app, "state", {}).get("verbose", False) else 0
+    Parallel(n_jobs=jobs, verbose=verbose_level)(
+        delayed(_render_one_frame)(frame, label, plot_dir, colormap, dpi, vmin, vmax)
+        for frame in frames
+    )
+    typer.echo(f"  Saved {len(frames)} frames to {plot_dir}")
 
     # Create video if requested
     if video:
@@ -235,6 +316,9 @@ def run(
     ),
     species: Optional[List[int]] = typer.Option(
         None, "--species", help="Species numbers for phases (default: all available)."
+    ),
+    jobs: int = typer.Option(
+        -1, "-j", "--jobs", help="Number of parallel processes (-1 = all cores)."
     ),
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Print verbose output."
@@ -326,6 +410,7 @@ def run(
                 vmax,
                 video,
                 fps,
+                jobs,
             )
 
     # Plot phases
@@ -355,6 +440,7 @@ def run(
                     vmax,
                     video,
                     fps,
+                    jobs,
                 )
 
 

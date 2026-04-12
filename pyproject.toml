@@ -14,6 +14,7 @@ dependencies = [
     "pre-commit",
     "dask",
     "typer>=0.20.1",
+    "joblib>=1.4.2",
 ]
 license = {file = "LICENSE.txt"}
 
