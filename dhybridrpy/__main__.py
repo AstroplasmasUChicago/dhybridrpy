@@ -11,6 +11,10 @@ import numpy as np
 import typer
 
 from .dhybridrpy import DHybridrpy
+from .data import Data
+
+MAX_W = 1920
+MAX_H = 1080
 
 app = typer.Typer(add_completion=False)
 
@@ -44,6 +48,57 @@ def compute_vlim(dpy, get_data, timesteps):
             continue
         print_progress("Scanning color range", i + 1, len(sampled))
     return global_min, global_max
+
+
+def downsample(data, xdata, ydata):
+    """Stride-sample 2D data to fit within MAX_W x MAX_H pixels, preserving aspect ratio."""
+    step = max(1, max(data.shape[0] // MAX_W, data.shape[1] // MAX_H))
+    if step > 1:
+        return data[::step, ::step], xdata[::step], ydata[::step]
+    return data, xdata, ydata
+
+
+def vecho(msg: str) -> None:
+    """Print only when verbose mode is active."""
+    if getattr(app, "state", {}).get("verbose", False):
+        typer.echo(msg)
+
+
+def plot_frame(ax, data_obj, colormap, vmin, vmax):
+    """Plot a single frame, downsampling large 2D data."""
+    data = data_obj.data
+    if hasattr(data, "compute"):
+        data = data.compute()
+
+    ndim = data.ndim
+    orig_shape = data.shape
+    if ndim == 1 or (ndim == 2 and max(data.shape) <= MAX_W):
+        vecho(f"    Data {orig_shape} — no downsampling needed")
+        data_obj.plot(ax=ax, colormap=colormap, vmin=vmin, vmax=vmax)
+        return
+
+    # Large 2D data — downsample and render manually
+    xdata = data_obj.xdata
+    ydata = data_obj.ydata
+    if hasattr(xdata, "compute"):
+        xdata = xdata.compute()
+    if hasattr(ydata, "compute"):
+        ydata = ydata.compute()
+
+    data, xdata, ydata = downsample(data, xdata, ydata)
+    vecho(f"    Data {orig_shape} → {data.shape} (downsampled)")
+
+    X, Y = np.meshgrid(xdata, ydata, indexing="ij")
+    mesh = ax.pcolormesh(
+        X, Y, data, cmap=colormap, shading="auto", vmin=vmin, vmax=vmax
+    )
+    ax.set_title(data_obj._plot_title)
+    xlabel, ylabel = Data._LABEL_MAPPINGS[data_obj.name]
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_xlim(data_obj.xlimdata)
+    ax.set_ylim(data_obj.ylimdata)
+    plt.colorbar(mesh, ax=ax, label=data_obj.name)
 
 
 def make_video(plot_dir: str, name: str, fps: int) -> None:
@@ -141,7 +196,7 @@ def plot_data_series(
 
         try:
             fig, ax = plt.subplots(figsize=(10, 6), dpi=dpi)
-            data_obj.plot(ax=ax, colormap=colormap, vmin=vmin, vmax=vmax)
+            plot_frame(ax, data_obj, colormap, vmin, vmax)
             filename = f"{label}_{ts_num:06d}.png"
             fig.savefig(os.path.join(plot_dir, filename), bbox_inches="tight")
         except OSError:
@@ -181,6 +236,9 @@ def run(
     species: Optional[List[int]] = typer.Option(
         None, "--species", help="Species numbers for phases (default: all available)."
     ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Print verbose output."
+    ),
     video: bool = typer.Option(
         False, "--video", help="Create MP4 video from saved PNGs using ffmpeg."
     ),
@@ -215,6 +273,9 @@ def run(
             "Use -o/--output to specify the path to the output folder.", err=True
         )
         raise typer.Exit(1)
+
+    state = {"verbose": verbose}
+    app.state = state
 
     try:
         dpy = DHybridrpy(input, output, exclude_timestep_zero=True)
