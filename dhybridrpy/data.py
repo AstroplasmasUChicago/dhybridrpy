@@ -356,22 +356,26 @@ class Data(BaseProperties):
     @property
     def data(self) -> Union[np.ndarray, da.Array]:
         """Retrieve the data at each grid point."""
-        if self.name not in self._data_dict:
+        # If data was set programmatically (e.g. by arithmetic operators),
+        # return the cached result since there is no HDF5 file to re-read.
+        if self.name in self._data_dict:
+            return self._data_dict[self.name]
 
-            def loader():
-                with h5py.File(self.file_path, "r") as f:
-                    return f["DATA"][:].T
+        # Otherwise, always re-read from HDF5 without caching to avoid OOM
+        # when iterating over many timesteps.
+        def loader():
+            with h5py.File(self.file_path, "r") as f:
+                return f["DATA"][:].T
 
-            if self.lazy:
-                delayed_obj = delayed(loader)()
-                self._data_dict[self.name] = da.from_delayed(
-                    delayed_obj,
-                    shape=self._get_data_shape(),
-                    dtype=self._get_data_dtype(),
-                )
-            else:
-                self._data_dict[self.name] = loader()
-        return self._data_dict[self.name]
+        if self.lazy:
+            delayed_obj = delayed(loader)()
+            return da.from_delayed(
+                delayed_obj,
+                shape=self._get_data_shape(),
+                dtype=self._get_data_dtype(),
+            )
+        else:
+            return loader()
 
     @property
     def xdata(self) -> Union[np.ndarray, da.Array]:
