@@ -276,21 +276,28 @@ def plot_data_series(
                 plt.close(fig)
             print_progress(f"  Plotting {label}", i + 1, len(timesteps))
     else:
-        # Parallel mode — extract data in main thread, render in worker processes
-        frames = []
+        # Parallel mode — load and render in batches of n_jobs to limit memory
+        import joblib
+
+        n_workers = jobs if jobs > 0 else joblib.cpu_count()
+        verbose_level = 10 if getattr(app, "state", {}).get("verbose", False) else 0
+
+        batch = []
         for i, ts_num in enumerate(timesteps):
             frame = _extract_frame_data(dpy, get_data, ts_num)
             if frame is not None:
-                frames.append(frame)
-            print_progress(f"  Loading {label}", i + 1, len(timesteps))
+                batch.append(frame)
 
-        verbose_level = 10 if getattr(app, "state", {}).get("verbose", False) else 0
-        Parallel(n_jobs=jobs, verbose=verbose_level)(
-            delayed(_render_one_frame)(
-                frame, label, plot_dir, colormap, dpi, vmin, vmax
-            )
-            for frame in frames
-        )
+            if len(batch) >= n_workers or i == len(timesteps) - 1:
+                if batch:
+                    Parallel(n_jobs=jobs, verbose=verbose_level)(
+                        delayed(_render_one_frame)(
+                            frame, label, plot_dir, colormap, dpi, vmin, vmax
+                        )
+                        for frame in batch
+                    )
+                    batch = []
+            print_progress(f"  Plotting {label}", i + 1, len(timesteps))
 
     typer.echo(f"  Saved {len(timesteps)} frames to {plot_dir}")
 
