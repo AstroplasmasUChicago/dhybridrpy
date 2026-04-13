@@ -142,6 +142,40 @@ dplot -i path/to/input --fields Bx --vmin -1.0 --vmax 1.0
 dplot -i path/to/input --fields Bx --vmin 0
 ```
 
+## Parallel Rendering
+
+Use `-j` to render frames in parallel across multiple processes:
+
+```bash
+# Use 4 processes
+dplot -i path/to/input --all-fields -j 4
+
+# Use all available CPU cores
+dplot -i path/to/input --all-fields -j -1
+```
+
+By default, dplot runs sequentially (`-j 1`). In parallel mode, data is loaded in the main process and rendering is distributed across worker processes.
+
+## Large Datasets
+
+For high-resolution simulations (e.g., 15000x3000 grids), dplot automatically downsamples data to fit within 1920x1080 pixels before rendering. This preserves the aspect ratio and keeps plotting fast. Downsampling is applied both in sequential and parallel modes.
+
+Use `--verbose` to see downsampling details:
+
+```bash
+dplot -i path/to/input --fields Bx --verbose
+#     Data (15000, 3000) → (2143, 429) (downsampled)
+```
+
+## Verbose Mode
+
+Use `--verbose` / `-v` to print detailed information about what dplot is doing, including downsampling and parallel worker activity:
+
+```bash
+dplot -i path/to/input --fields Bx -v
+dplot -i path/to/input --all-fields -j 4 -v
+```
+
 ## CLI Options Reference
 
 | Option | Short | Default | Description |
@@ -154,6 +188,8 @@ dplot -i path/to/input --fields Bx --vmin 0
 | `--all-phases` | | `False` | Plot all available phase-space distributions. |
 | `--type` | | `Total` | Field type: `Total`, `External`, or `Self`. |
 | `--species` | | all | Species numbers for phases. Repeat for multiple (e.g. `--species 1 --species 3`). |
+| `--jobs` | `-j` | `1` | Number of parallel rendering processes. Use `-1` for all cores. |
+| `--verbose` | `-v` | `False` | Print verbose output (downsampling info, parallel progress). |
 | `--video` | | `False` | Create an MP4 video from the saved PNGs using ffmpeg. |
 | `--fps` | | `10` | Video framerate (frames per second). |
 | `--colormap` | `-c` | `viridis` | Matplotlib colormap name. |

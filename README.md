@@ -81,7 +81,7 @@ dplot -i path/to/input --phases p1x1 --species 3
 dplot -i path/to/input --all-fields --video
 ```
 
-Key options: `--video`, `--fps`, `--colormap`, `--dpi`, `--vmin`/`--vmax`, `--type`, `--plots-dir`. See the [dplot documentation](https://dhybridrpy.readthedocs.io/en/latest/user-guide/dplot/) for full details.
+Key options: `--video`, `--fps`, `--colormap`, `--dpi`, `--vmin`/`--vmax`, `--type`, `--plots-dir`, `-j` (parallel processes), `-v` (verbose). Large datasets are automatically downsampled to 1080p. See the [dplot documentation](https://dhybridrpy.readthedocs.io/en/latest/user-guide/dplot/) for full details.
 
 ## Documentation
 
