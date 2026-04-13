@@ -255,7 +255,7 @@ def plot_data_series(
     vmax: Optional[float],
     video: bool,
     fps: int,
-    jobs: int = -1,
+    jobs: int = 1,
 ) -> None:
     """Plot a data series across all timesteps and optionally create video."""
     os.makedirs(plot_dir, exist_ok=True)
@@ -270,21 +270,42 @@ def plot_data_series(
             vmax = auto_vmax
         typer.echo(f"  Color range: [{vmin:.4g}, {vmax:.4g}]")
 
-    # Extract data in main thread (unpicklable dpy stays here)
-    frames = []
-    for i, ts_num in enumerate(timesteps):
-        frame = _extract_frame_data(dpy, get_data, ts_num)
-        if frame is not None:
-            frames.append(frame)
-        print_progress(f"  Loading {label}", i + 1, len(timesteps))
+    if jobs == 1:
+        # Sequential mode — no overhead from data extraction or process spawning
+        for i, ts_num in enumerate(timesteps):
+            try:
+                data_obj = get_data(dpy.timestep(ts_num))
+            except (AttributeError, ValueError, OSError):
+                print_progress(f"  Plotting {label}", i + 1, len(timesteps))
+                continue
+            try:
+                fig, ax = plt.subplots(figsize=(10, 6), dpi=dpi)
+                plot_frame(ax, data_obj, colormap, vmin, vmax)
+                filename = f"{label}_{ts_num:06d}.png"
+                fig.savefig(os.path.join(plot_dir, filename), bbox_inches="tight")
+            except OSError:
+                pass
+            finally:
+                plt.close(fig)
+            print_progress(f"  Plotting {label}", i + 1, len(timesteps))
+    else:
+        # Parallel mode — extract data in main thread, render in worker processes
+        frames = []
+        for i, ts_num in enumerate(timesteps):
+            frame = _extract_frame_data(dpy, get_data, ts_num)
+            if frame is not None:
+                frames.append(frame)
+            print_progress(f"  Loading {label}", i + 1, len(timesteps))
 
-    # Render frames in parallel (only picklable numpy arrays cross process boundary)
-    verbose_level = 10 if getattr(app, "state", {}).get("verbose", False) else 0
-    Parallel(n_jobs=jobs, verbose=verbose_level)(
-        delayed(_render_one_frame)(frame, label, plot_dir, colormap, dpi, vmin, vmax)
-        for frame in frames
-    )
-    typer.echo(f"  Saved {len(frames)} frames to {plot_dir}")
+        verbose_level = 10 if getattr(app, "state", {}).get("verbose", False) else 0
+        Parallel(n_jobs=jobs, verbose=verbose_level)(
+            delayed(_render_one_frame)(
+                frame, label, plot_dir, colormap, dpi, vmin, vmax
+            )
+            for frame in frames
+        )
+
+    typer.echo(f"  Saved {len(timesteps)} frames to {plot_dir}")
 
     # Create video if requested
     if video:
@@ -318,7 +339,7 @@ def run(
         None, "--species", help="Species numbers for phases (default: all available)."
     ),
     jobs: int = typer.Option(
-        -1, "-j", "--jobs", help="Number of parallel processes (-1 = all cores)."
+        1, "-j", "--jobs", help="Number of parallel processes (-1 = all cores)."
     ),
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Print verbose output."
