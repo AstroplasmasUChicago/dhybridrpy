@@ -168,27 +168,12 @@ def _render_one_frame(frame_data, label, plot_dir, colormap, dpi, vmin, vmax):
     try:
         fig, ax = plt.subplots(figsize=(10, 6), dpi=dpi)
 
-        needs_downsample = data.ndim == 2 and max(data.shape) > MAX_W
-
-        if data.ndim == 1 or not needs_downsample:
-            if data.ndim == 1:
-                ax.plot(xdata, data)
-                ax.set_xlabel("$x$")
-                ax.set_ylabel(name)
-                ax.set_xlim(xlim)
-            else:
-                X, Y = np.meshgrid(xdata, ydata, indexing="ij")
-                mesh = ax.pcolormesh(
-                    X, Y, data, cmap=colormap, shading="auto", vmin=vmin, vmax=vmax
-                )
-                xlabel, ylabel = Data._LABEL_MAPPINGS[name]
-                ax.set_xlabel(xlabel)
-                ax.set_ylabel(ylabel)
-                ax.set_xlim(xlim)
-                ax.set_ylim(ylim)
-                plt.colorbar(mesh, ax=ax, label=name)
+        if data.ndim == 1:
+            ax.plot(xdata, data)
+            ax.set_xlabel("$x$")
+            ax.set_ylabel(name)
+            ax.set_xlim(xlim)
         else:
-            data, xdata, ydata = downsample(data, xdata, ydata)
             X, Y = np.meshgrid(xdata, ydata, indexing="ij")
             mesh = ax.pcolormesh(
                 X, Y, data, cmap=colormap, shading="auto", vmin=vmin, vmax=vmax
@@ -231,6 +216,8 @@ def _extract_frame_data(dpy, get_data, ts_num):
         if hasattr(ydata, "compute"):
             ydata = ydata.compute()
         ylim = data_obj.ylimdata
+        # Downsample immediately to reduce memory footprint
+        data, xdata, ydata = downsample(data, xdata, ydata)
 
     return (
         data,
