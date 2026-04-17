@@ -82,7 +82,12 @@ class DHybridrpy:
         exclude_timestep_zero: Excludes the zeroth timestep, if present, from the list of timesteps.
     """
 
-    _FIELD_MAPPING = {"Magnetic": "B", "Electric": "E", "CurrentDens": "J"}
+    _FIELD_MAPPING = {
+        "Magnetic": "B",
+        "Electric": "E",
+        "CurrentDens": "J",
+        "Gravity": "G",
+    }
     _PHASE_MAPPING = {"FluidVel": "V", "PressureTen": "P"}
     _COMPONENT_MAPPING = {"Intensity": "magnitude"}
     _SPECIES_PATTERN = re.compile(r"\d+")
@@ -104,7 +109,7 @@ class DHybridrpy:
         self._sorted_timesteps_cache = {}
         self._field_phase_timesteps = set()
         self._raw_timesteps = set()
-        self._track_collections= {}  # {species: TrackCollection}
+        self._track_collections = {}  # {species: TrackCollection}
         self._timestep_times = {}  # {timestep: float} cache of TIME from HDF5
         self._validate_paths()
         self.inputs = InputFileParser(input_file).input_dict
@@ -287,13 +292,11 @@ class DHybridrpy:
     def timesteps(self) -> np.ndarray:
         """Retrieve an array of the timesteps for fields and phases."""
         if "field_phase" not in self._sorted_timesteps_cache:
-            self._sorted_timesteps_cache["field_phase"] = np.sort(list(self._field_phase_timesteps))
+            self._sorted_timesteps_cache["field_phase"] = np.sort(
+                list(self._field_phase_timesteps)
+            )
         sorted_ts = self._sorted_timesteps_cache["field_phase"]
-        if (
-            self.exclude_timestep_zero
-            and len(sorted_ts) > 0
-            and sorted_ts[0] == 0
-        ):
+        if self.exclude_timestep_zero and len(sorted_ts) > 0 and sorted_ts[0] == 0:
             return sorted_ts[1:]
         return sorted_ts
 
@@ -306,11 +309,7 @@ class DHybridrpy:
         if "raw" not in self._sorted_timesteps_cache:
             self._sorted_timesteps_cache["raw"] = np.sort(list(self._raw_timesteps))
         sorted_ts = self._sorted_timesteps_cache["raw"]
-        if (
-            self.exclude_timestep_zero
-            and len(sorted_ts) > 0
-            and sorted_ts[0] == 0
-        ):
+        if self.exclude_timestep_zero and len(sorted_ts) > 0 and sorted_ts[0] == 0:
             return sorted_ts[1:]
         return sorted_ts
 

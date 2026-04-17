@@ -60,6 +60,7 @@ Fields represent electromagnetic quantities on the simulation grid.
 | Magnetic (B) | `Bx`, `By`, `Bz`, `Bmagnitude` | Magnetic field |
 | Electric (E) | `Ex`, `Ey`, `Ez`, `Emagnitude` | Electric field |
 | Current (J) | `Jx`, `Jy`, `Jz`, `Jmagnitude` | Current density |
+| Gravity (G) | `Gx`, `Gy`, `Gz`, `Gmagnitude` | External force field |
 
 ### Accessing Fields
 
