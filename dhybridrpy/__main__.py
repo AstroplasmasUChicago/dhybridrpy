@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import subprocess
 from typing import List, Optional
@@ -26,6 +27,18 @@ def print_progress(label: str, current: int, total: int) -> None:
     sys.stderr.flush()
     if current == total:
         sys.stderr.write("\n")
+
+
+_TITLE_TIME_RE = re.compile(r"(at time )([-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)")
+
+
+def shorten_title_time(title: str, ndecimals: int = 1) -> str:
+    """Round the 'at time <N>' value inside a plot title to `ndecimals` decimals."""
+    return _TITLE_TIME_RE.sub(
+        lambda m: f"{m.group(1)}{float(m.group(2)):.{ndecimals}f}",
+        title,
+        count=1,
+    )
 
 
 def compute_vlim(dpy, get_data, timesteps):
@@ -201,6 +214,7 @@ def _extract_frame_data(dpy, get_data, ts_num):
     except (AttributeError, ValueError, OSError):
         return None
 
+    data_obj._plot_title = shorten_title_time(data_obj._plot_title)
     data = data_obj.data
     if hasattr(data, "compute"):
         data = data.compute()
@@ -265,6 +279,7 @@ def plot_data_series(
             except (AttributeError, ValueError, OSError):
                 print_progress(f"  Plotting {label}", i + 1, len(timesteps))
                 continue
+            data_obj._plot_title = shorten_title_time(data_obj._plot_title)
             try:
                 fig, ax = plt.subplots(figsize=(10, 6), dpi=dpi)
                 plot_frame(ax, data_obj, colormap, vmin, vmax)
@@ -274,6 +289,7 @@ def plot_data_series(
                 pass
             finally:
                 plt.close(fig)
+                data_obj._data_dict.clear()
             print_progress(f"  Plotting {label}", i + 1, len(timesteps))
     else:
         # Parallel mode — generator feeds frames on demand, joblib manages backpressure
