@@ -41,13 +41,13 @@ def shorten_title_time(title: str, ndecimals: int = 1) -> str:
     )
 
 
-def compute_vlim(dpy, get_data, timesteps):
-    """Sample ~10 equally spaced timesteps to estimate global vmin/vmax."""
+def compute_vlim(dpy, get_data, timesteps, pmin=2.0, pmax=98.0):
+    """Sample ~10 equally spaced timesteps to estimate global vmin/vmax via percentiles."""
     indices = np.unique(
         np.linspace(0, len(timesteps) - 1, min(10, len(timesteps)), dtype=int)
     )
     sampled = timesteps[indices]
-    global_min, global_max = np.inf, -np.inf
+    chunks = []
     for i, ts_num in enumerate(sampled):
         try:
             data = get_data(dpy.timestep(ts_num)).data
@@ -56,12 +56,15 @@ def compute_vlim(dpy, get_data, timesteps):
         try:
             if hasattr(data, "compute"):
                 data = data.compute()
-            global_min = min(global_min, float(np.min(data)))
-            global_max = max(global_max, float(np.max(data)))
+            chunks.append(np.asarray(data).ravel())
         except OSError:
             continue
         print_progress("Scanning color range", i + 1, len(sampled))
-    return global_min, global_max
+    if not chunks:
+        return np.inf, -np.inf
+    combined = np.concatenate(chunks)
+    lo, hi = np.percentile(combined, [pmin, pmax])
+    return float(lo), float(hi)
 
 
 def downsample(data, xdata, ydata):
@@ -233,7 +236,7 @@ def _extract_frame_data(dpy, get_data, ts_num):
         # Downsample immediately to reduce memory footprint
         data, xdata, ydata = downsample(data, xdata, ydata)
 
-    return (
+    result = (
         data,
         xdata,
         ydata,
@@ -243,6 +246,11 @@ def _extract_frame_data(dpy, get_data, ts_num):
         data_obj._plot_title,
         ts_num,
     )
+
+    # Clear cached HDF5 data to prevent memory leak in the main process
+    data_obj._data_dict.clear()
+
+    return result
 
 
 def plot_data_series(
@@ -257,6 +265,8 @@ def plot_data_series(
     video: bool,
     fps: int,
     jobs: int = 1,
+    pmin: float = 2.0,
+    pmax: float = 98.0,
 ) -> None:
     """Plot a data series across all timesteps and optionally create video."""
     os.makedirs(plot_dir, exist_ok=True)
@@ -264,12 +274,14 @@ def plot_data_series(
 
     # Compute global color limits if not provided
     if vmin is None or vmax is None:
-        auto_vmin, auto_vmax = compute_vlim(dpy, get_data, timesteps)
+        auto_vmin, auto_vmax = compute_vlim(dpy, get_data, timesteps, pmin, pmax)
         if vmin is None:
             vmin = auto_vmin
         if vmax is None:
             vmax = auto_vmax
-        typer.echo(f"  Color range: [{vmin:.4g}, {vmax:.4g}]")
+        typer.echo(
+            f"  Color range: [{vmin:.4g}, {vmax:.4g}] (percentiles {pmin:g}/{pmax:g})"
+        )
 
     if jobs == 1:
         # Sequential mode — no overhead from data extraction or process spawning
@@ -361,6 +373,12 @@ def run(
     vmax: Optional[float] = typer.Option(
         None, "--vmax", help="Fixed color scale maximum."
     ),
+    pmin: float = typer.Option(
+        2.0, "--pmin", help="Lower percentile for auto vmin during scan."
+    ),
+    pmax: float = typer.Option(
+        98.0, "--pmax", help="Upper percentile for auto vmax during scan."
+    ),
     plots_dir: str = typer.Option(
         "plots", "--plots-dir", help="Base output directory for plots."
     ),
@@ -435,6 +453,8 @@ def run(
                 video,
                 fps,
                 jobs,
+                pmin,
+                pmax,
             )
 
     # Plot phases
@@ -465,6 +485,8 @@ def run(
                     video,
                     fps,
                     jobs,
+                    pmin,
+                    pmax,
                 )
 
 

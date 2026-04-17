@@ -132,13 +132,19 @@ dplot -i path/to/input --fields Bx --plots-dir my_plots
 
 ## Color Scale
 
-`dplot` automatically determines a consistent color range across all timesteps by sampling ~10 equally spaced frames. You can override this with explicit limits:
+`dplot` automatically determines a consistent color range across all timesteps by sampling ~10 equally spaced frames and taking the 2nd and 98th percentiles of the sampled values. This clips extreme outliers so features stay visible. You can override the percentiles with `--pmin` / `--pmax`, or set explicit limits with `--vmin` / `--vmax`:
 
 ```bash
-# Set both limits
+# Default behavior: vmin = 2nd percentile, vmax = 98th percentile
+dplot -i path/to/input --fields Bx
+
+# Use tighter percentiles
+dplot -i path/to/input --fields Bx --pmin 5 --pmax 95
+
+# Set both limits explicitly (skips the percentile scan)
 dplot -i path/to/input --fields Bx --vmin -1.0 --vmax 1.0
 
-# Set only one limit (the other is auto-computed)
+# Set only one limit (the other is auto-computed from the percentile)
 dplot -i path/to/input --fields Bx --vmin 0
 ```
 
@@ -194,8 +200,10 @@ dplot -i path/to/input --all-fields -j 4 -v
 | `--fps` | | `10` | Video framerate (frames per second). |
 | `--colormap` | `-c` | `viridis` | Matplotlib colormap name. |
 | `--dpi` | | `150` | Plot resolution in dots per inch. |
-| `--vmin` | | auto | Fixed color scale minimum. |
-| `--vmax` | | auto | Fixed color scale maximum. |
+| `--vmin` | | auto | Fixed color scale minimum (overrides `--pmin`). |
+| `--vmax` | | auto | Fixed color scale maximum (overrides `--pmax`). |
+| `--pmin` | | `2.0` | Lower percentile used to estimate `vmin` during the initial scan. |
+| `--pmax` | | `98.0` | Upper percentile used to estimate `vmax` during the initial scan. |
 | `--plots-dir` | | `plots` | Base output directory for saved plots. |
 
 ## Examples
