@@ -1,6 +1,6 @@
 [project]
 name = "dhybridrpy"
-version = "v1.8"
+version = "v1.9"
 description = "A Python package to easily read input + output data from dHybridR."
 readme = "README.md"
 requires-python = ">=3.8"
