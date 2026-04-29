@@ -202,7 +202,7 @@ def _render_one_frame(frame_data, label, plot_dir, colormap, dpi, vmin, vmax):
             plt.colorbar(mesh, ax=ax, label=name)
 
         ax.set_title(title)
-        filename = f"{label}_{ts_num:06d}.png"
+        filename = f"{label}_{ts_num:08d}.png"
         fig.savefig(os.path.join(plot_dir, filename), bbox_inches="tight")
     except OSError:
         pass
@@ -295,7 +295,7 @@ def plot_data_series(
             try:
                 fig, ax = plt.subplots(figsize=(10, 6), dpi=dpi)
                 plot_frame(ax, data_obj, colormap, vmin, vmax)
-                filename = f"{label}_{ts_num:06d}.png"
+                filename = f"{label}_{ts_num:08d}.png"
                 fig.savefig(os.path.join(plot_dir, filename), bbox_inches="tight")
             except OSError:
                 pass
