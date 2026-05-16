@@ -181,6 +181,7 @@ def print_available(dpy: DHybridrpy) -> None:
 def _render_one_frame(frame_data, label, plot_dir, colormap, dpi, vmin, vmax):
     """Render and save a single frame from pre-extracted data. Called by joblib."""
     data, xdata, ydata, xlim, ylim, name, title, ts_num = frame_data
+    fig = None
     try:
         fig, ax = plt.subplots(figsize=(10, 6), dpi=dpi)
 
@@ -207,7 +208,8 @@ def _render_one_frame(frame_data, label, plot_dir, colormap, dpi, vmin, vmax):
     except OSError:
         pass
     finally:
-        plt.close(fig)
+        if fig is not None:
+            plt.close(fig)
 
 
 def _extract_frame_data(dpy, get_data, ts_num):
@@ -292,6 +294,7 @@ def plot_data_series(
                 print_progress(f"  Plotting {label}", i + 1, len(timesteps))
                 continue
             data_obj._plot_title = shorten_title_time(data_obj._plot_title)
+            fig = None
             try:
                 fig, ax = plt.subplots(figsize=(10, 6), dpi=dpi)
                 plot_frame(ax, data_obj, colormap, vmin, vmax)
@@ -300,7 +303,8 @@ def plot_data_series(
             except OSError:
                 pass
             finally:
-                plt.close(fig)
+                if fig is not None:
+                    plt.close(fig)
                 data_obj._data_dict.clear()
             print_progress(f"  Plotting {label}", i + 1, len(timesteps))
     else:
