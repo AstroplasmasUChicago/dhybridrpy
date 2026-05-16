@@ -1223,22 +1223,26 @@ class Raw(BaseProperties):
 
     @property
     def dict(self) -> dict:
-        """Retrieve a dictionary of the raw file's keys and values."""
-        if not self._data_dict:
-            with h5py.File(self.file_path, "r") as file:
-                for key in file.keys():
-                    if self.lazy:
-                        shape = file[key].shape
-                        dtype = file[key].dtype
+        """Retrieve a dictionary of the raw file's keys and values.
 
-                        def dict_helper(key=key):
-                            with h5py.File(self.file_path, "r") as f:
-                                return f[key][:]
+        Always re-reads from HDF5 (or returns fresh dask-delayed views) to
+        avoid OOM when iterating over many timesteps. Matches Data.data.
+        """
+        result: dict = {}
+        with h5py.File(self.file_path, "r") as file:
+            for key in file.keys():
+                if self.lazy:
+                    shape = file[key].shape
+                    dtype = file[key].dtype
 
-                        delayed_helper = delayed(dict_helper)()
-                        self._data_dict[key] = da.from_delayed(
-                            delayed_helper, shape=shape, dtype=dtype
-                        )
-                    else:
-                        self._data_dict[key] = file[key][:]
-        return self._data_dict
+                    def dict_helper(key=key):
+                        with h5py.File(self.file_path, "r") as f:
+                            return f[key][:]
+
+                    delayed_helper = delayed(dict_helper)()
+                    result[key] = da.from_delayed(
+                        delayed_helper, shape=shape, dtype=dtype
+                    )
+                else:
+                    result[key] = file[key][:]
+        return result
