@@ -190,6 +190,7 @@ class TrackCollection:
         self.lazy = lazy
         self._tracks: Dict[str, Track] = {}
         self._track_ids: Optional[np.ndarray] = None
+        self._track_ids_set: Optional[set] = None
 
     @property
     def track_ids(self) -> np.ndarray:
@@ -200,12 +201,15 @@ class TrackCollection:
             # Sort by (MPI rank, tag) numerically
             ids.sort(key=lambda x: tuple(map(int, x.split("-"))))
             self._track_ids = np.array(ids)
+            self._track_ids_set = set(ids)
         return self._track_ids
 
     def __getitem__(self, track_id: str) -> Track:
         """Get a track by its ID (format: 'rank-tag')."""
         if track_id not in self._tracks:
-            if track_id not in self.track_ids:
+            # Trigger track_ids cache population (also populates _track_ids_set)
+            _ = self.track_ids
+            if track_id not in self._track_ids_set:
                 raise KeyError(
                     f"Track ID '{track_id}' not found for species {self.species}."
                 )
