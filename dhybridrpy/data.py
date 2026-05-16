@@ -186,22 +186,18 @@ def fft_power_1d_slices(
         n = data.shape[2]
         axis = 2
 
-    # Wavenumber array (positive frequencies only)
-    k_full = np.fft.fftfreq(n, d=L / n) * 2 * np.pi
-    pos_mask = k_full >= 0
-    k = k_full[pos_mask]
+    # Use rfft for real input: returns n//2 + 1 bins including DC and (for even n)
+    # the Nyquist bin, which np.fft.fftfreq's positive half misses.
+    k = np.fft.rfftfreq(n, d=L / n) * 2 * np.pi
 
-    # Vectorized: one batched FFT along `axis`, then reshape to (n_slices, n_pos).
-    fft_data = np.fft.fft(data, axis=axis)
+    fft_data = np.fft.rfft(data, axis=axis)
     power = np.abs(fft_data) ** 2 / n
 
-    # Take positive frequencies along `axis`
-    pos_idx = np.where(pos_mask)[0]
-    power = np.take(power, pos_idx, axis=axis)
-
-    # Double everything except DC to account for negative-frequency conjugates
+    # Double interior bins to account for negative-frequency conjugate pairs.
+    # DC (index 0) is unique. For even n the Nyquist bin (last index) is also
+    # unique and must NOT be doubled; for odd n every non-DC bin has a pair.
     doubler = [slice(None)] * power.ndim
-    doubler[axis] = slice(1, None)
+    doubler[axis] = slice(1, -1 if n % 2 == 0 else None)
     power[tuple(doubler)] *= 2
 
     # Move FFT axis to the end and collapse the remaining dims into "slices"
