@@ -191,44 +191,22 @@ def fft_power_1d_slices(
     pos_mask = k_full >= 0
     k = k_full[pos_mask]
 
-    # Extract slices
-    if num_dimensions == 1:
-        slices = [data]
-    elif num_dimensions == 2:
-        if axis == 0:
-            slices = [data[:, j] for j in range(data.shape[1])]
-        else:
-            slices = [data[i, :] for i in range(data.shape[0])]
-    else:  # 3D
-        if axis == 0:
-            slices = [
-                data[:, j, kk]
-                for j in range(data.shape[1])
-                for kk in range(data.shape[2])
-            ]
-        elif axis == 1:
-            slices = [
-                data[i, :, kk]
-                for i in range(data.shape[0])
-                for kk in range(data.shape[2])
-            ]
-        else:
-            slices = [
-                data[i, j, :]
-                for i in range(data.shape[0])
-                for j in range(data.shape[1])
-            ]
+    # Vectorized: one batched FFT along `axis`, then reshape to (n_slices, n_pos).
+    fft_data = np.fft.fft(data, axis=axis)
+    power = np.abs(fft_data) ** 2 / n
 
-    # Compute power spectrum for each slice
-    power_spectra = []
-    for slice_data in slices:
-        fft_data = np.fft.fft(slice_data)
-        power = np.abs(fft_data) ** 2 / n
-        power = power[pos_mask]
-        power[1:] *= 2
-        power_spectra.append(power)
+    # Take positive frequencies along `axis`
+    pos_idx = np.where(pos_mask)[0]
+    power = np.take(power, pos_idx, axis=axis)
 
-    power_spectra = np.array(power_spectra)
+    # Double everything except DC to account for negative-frequency conjugates
+    doubler = [slice(None)] * power.ndim
+    doubler[axis] = slice(1, None)
+    power[tuple(doubler)] *= 2
+
+    # Move FFT axis to the end and collapse the remaining dims into "slices"
+    power = np.moveaxis(power, axis, -1)
+    power_spectra = power.reshape(-1, power.shape[-1])
 
     # Compute statistics in log space
     power_spectra_safe = np.maximum(power_spectra, 1e-50)
