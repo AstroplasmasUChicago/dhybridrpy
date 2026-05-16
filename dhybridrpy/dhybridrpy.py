@@ -355,6 +355,12 @@ class DHybridrpy:
                 file_match = track_file_pattern.match(filename)
                 if file_match:
                     file_path = os.path.join(species_path, filename)
+                    if species in self._track_collections:
+                        logger.warning(
+                            f"Duplicate track file for species {species}: "
+                            f"'{self._track_collections[species].file_path}' "
+                            f"will be replaced by '{file_path}'."
+                        )
                     self._track_collections[species] = TrackCollection(
                         file_path=file_path, species=species, lazy=self.lazy
                     )
