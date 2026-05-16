@@ -61,7 +61,12 @@ def compute_vlim(dpy, get_data, timesteps, pmin=2.0, pmax=98.0):
             continue
         print_progress("Scanning color range", i + 1, len(sampled))
     if not chunks:
-        return np.inf, -np.inf
+        typer.echo(
+            "  Warning: could not sample any timesteps for color range; "
+            "falling back to per-frame autoscale.",
+            err=True,
+        )
+        return None, None
     combined = np.concatenate(chunks)
     lo, hi = np.percentile(combined, [pmin, pmax])
     return float(lo), float(hi)
@@ -281,9 +286,11 @@ def plot_data_series(
             vmin = auto_vmin
         if vmax is None:
             vmax = auto_vmax
-        typer.echo(
-            f"  Color range: [{vmin:.4g}, {vmax:.4g}] (percentiles {pmin:g}/{pmax:g})"
-        )
+        if vmin is not None and vmax is not None:
+            typer.echo(
+                f"  Color range: [{vmin:.4g}, {vmax:.4g}] "
+                f"(percentiles {pmin:g}/{pmax:g})"
+            )
 
     if jobs == 1:
         # Sequential mode — no overhead from data extraction or process spawning
