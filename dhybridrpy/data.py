@@ -419,6 +419,15 @@ class Data(BaseProperties):
         if self.timestep != other.timestep:
             raise ValueError(f"Timesteps differ: {self.timestep} vs {other.timestep}")
 
+    @staticmethod
+    def _short_operand_name(value) -> str:
+        """Concise label for the right-hand operand in a derived Data name."""
+        if isinstance(value, np.ndarray):
+            return f"ndarray<{','.join(str(d) for d in value.shape)}>"
+        if isinstance(value, da.Array):
+            return f"darray<{','.join(str(d) for d in value.shape)}>"
+        return str(value)
+
     def _apply_operation(self, other, op):
         """Apply a binary operation to self and another Data object or scalar."""
 
@@ -428,7 +437,7 @@ class Data(BaseProperties):
             other_name = other.name
         else:
             result = op(self.data, other)
-            other_name = str(other)
+            other_name = self._short_operand_name(other)
 
         symbol = self._BINOP_SYMBOL.get(op.__name__, op.__name__)
         return self._create_new_instance(result, symbol, other_name, other)
@@ -512,12 +521,16 @@ class Data(BaseProperties):
 
     def __rsub__(self, other):
         return self._create_new_instance(
-            other - self.data, "", f"{other}-{self.name}", self
+            other - self.data, "",
+            f"{self._short_operand_name(other)}-{self.name}",
+            self,
         )
 
     def __rtruediv__(self, other):
         return self._create_new_instance(
-            other / self.data, "", f"{other}/{self.name}", self
+            other / self.data, "",
+            f"{self._short_operand_name(other)}/{self.name}",
+            self,
         )
 
     # Ensure that mixed Data and NumPy operations produce a Data object
@@ -552,7 +565,8 @@ class Data(BaseProperties):
 
         # Build a descriptive name: e.g. "sin(By)"
         names = ",".join(
-            obj.name if isinstance(obj, Data) else str(obj) for obj in inputs
+            obj.name if isinstance(obj, Data) else self._short_operand_name(obj)
+            for obj in inputs
         )
         new_name = f"{ufunc.__name__}({names})"
 
