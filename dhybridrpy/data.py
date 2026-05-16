@@ -322,6 +322,18 @@ class Data(BaseProperties):
             self._data_dict[key] = delta * grid + (delta / 2) + axis_limits[0]
         return self._data_dict[key]
 
+    def _materialize(
+        self, arr: Union[np.ndarray, da.Array]
+    ) -> np.ndarray:
+        """Return a numpy array for `arr`, calling .compute() if it's a dask array.
+
+        Callers should bind `self.data` (or another property) once, then pass it
+        in — accessing `self.data` is a real HDF5 read in non-lazy mode.
+        """
+        if self.lazy and isinstance(arr, da.Array):
+            return arr.compute()
+        return arr
+
     def _get_data_shape(self) -> Tuple[int, ...]:
         """Retrieve the shape of the data without loading it."""
         if self._data_shape is None:
@@ -576,64 +588,42 @@ class Data(BaseProperties):
         if num_dimensions < 1:
             raise ValueError("Data must have at least 1 dimension.")
 
-        def is_computable(arr: Union[np.ndarray, da.Array]) -> bool:
-            return self.lazy and isinstance(arr, da.Array)
-
-        data = self.data.compute() if is_computable(self.data) else self.data
+        data = self._materialize(self.data)
 
         # Determine which axis corresponds to the direction and compute mean/std
         if num_dimensions == 1:
             # For 1D data, just return as-is (no averaging needed)
-            coord_data = (
-                self.xdata.compute() if is_computable(self.xdata) else self.xdata
-            )
+            coord_data = self._materialize(self.xdata)
             mean_data = data
             std_data = np.zeros_like(data)
         elif num_dimensions == 2:
-            # For 2D data: shape is (nx, ny)
-            # x -> axis 0, y -> axis 1
+            # For 2D data: shape is (nx, ny); x -> axis 0, y -> axis 1
             if direction == "x":
-                # Average over y (axis 1)
                 mean_data = np.mean(data, axis=1)
                 std_data = np.std(data, axis=1)
-                coord_data = (
-                    self.xdata.compute() if is_computable(self.xdata) else self.xdata
-                )
+                coord_data = self._materialize(self.xdata)
             elif direction == "y":
-                # Average over x (axis 0)
                 mean_data = np.mean(data, axis=0)
                 std_data = np.std(data, axis=0)
-                coord_data = (
-                    self.ydata.compute() if is_computable(self.ydata) else self.ydata
-                )
+                coord_data = self._materialize(self.ydata)
             else:  # z
                 raise ValueError(
                     "Cannot average along 'z' for 2D data. Use 'x' or 'y'."
                 )
         elif num_dimensions == 3:
-            # For 3D data: shape is (nx, ny, nz)
-            # x -> axis 0, y -> axis 1, z -> axis 2
+            # For 3D data: shape is (nx, ny, nz); x->0, y->1, z->2
             if direction == "x":
-                # Average over y and z (axes 1 and 2)
                 mean_data = np.mean(data, axis=(1, 2))
                 std_data = np.std(data, axis=(1, 2))
-                coord_data = (
-                    self.xdata.compute() if is_computable(self.xdata) else self.xdata
-                )
+                coord_data = self._materialize(self.xdata)
             elif direction == "y":
-                # Average over x and z (axes 0 and 2)
                 mean_data = np.mean(data, axis=(0, 2))
                 std_data = np.std(data, axis=(0, 2))
-                coord_data = (
-                    self.ydata.compute() if is_computable(self.ydata) else self.ydata
-                )
+                coord_data = self._materialize(self.ydata)
             else:  # z
-                # Average over x and y (axes 0 and 1)
                 mean_data = np.mean(data, axis=(0, 1))
                 std_data = np.std(data, axis=(0, 1))
-                coord_data = (
-                    self.zdata.compute() if is_computable(self.zdata) else self.zdata
-                )
+                coord_data = self._materialize(self.zdata)
         else:
             raise NotImplementedError("avg_1d only supports 1D, 2D, or 3D data.")
 
@@ -656,33 +646,19 @@ class Data(BaseProperties):
                 - power: 1D array of power spectral density at each k
         """
 
-        def is_computable(arr):
-            return self.lazy and isinstance(arr, da.Array)
-
-        data = self.data.compute() if is_computable(self.data) else self.data
+        data = self._materialize(self.data)
         num_dimensions = data.ndim
 
-        # Get box sizes from coordinate limits
-        xlim = (
-            self.xlimdata.compute() if is_computable(self.xlimdata) else self.xlimdata
-        )
+        xlim = self._materialize(self.xlimdata)
         Lx = xlim[1] - xlim[0]
 
         Ly = None
         Lz = None
         if num_dimensions >= 2:
-            ylim = (
-                self.ylimdata.compute()
-                if is_computable(self.ylimdata)
-                else self.ylimdata
-            )
+            ylim = self._materialize(self.ylimdata)
             Ly = ylim[1] - ylim[0]
         if num_dimensions >= 3:
-            zlim = (
-                self.zlimdata.compute()
-                if is_computable(self.zlimdata)
-                else self.zlimdata
-            )
+            zlim = self._materialize(self.zlimdata)
             Lz = zlim[1] - zlim[0]
 
         return fft_power_iso(data, Lx, Ly, Lz)
@@ -766,30 +742,14 @@ class Data(BaseProperties):
                 - power_std_upper: 1D array of geometric mean * multiplicative std
         """
 
-        def is_computable(arr):
-            return self.lazy and isinstance(arr, da.Array)
+        data = self._materialize(self.data)
 
-        data = self.data.compute() if is_computable(self.data) else self.data
-
-        # Get box size along the chosen direction
         if direction == "x":
-            lim = (
-                self.xlimdata.compute()
-                if is_computable(self.xlimdata)
-                else self.xlimdata
-            )
+            lim = self._materialize(self.xlimdata)
         elif direction == "y":
-            lim = (
-                self.ylimdata.compute()
-                if is_computable(self.ylimdata)
-                else self.ylimdata
-            )
+            lim = self._materialize(self.ylimdata)
         else:  # z
-            lim = (
-                self.zlimdata.compute()
-                if is_computable(self.zlimdata)
-                else self.zlimdata
-            )
+            lim = self._materialize(self.zlimdata)
         L = lim[1] - lim[0]
 
         return fft_power_1d_slices(data, L, direction)
@@ -927,16 +887,13 @@ class Data(BaseProperties):
         default_xlabel = {"x": self._X, "y": self._Y, "z": self._Z}[direction]
 
         # Get coordinate limits
-        def is_computable(arr: Union[np.ndarray, da.Array]) -> bool:
-            return self.lazy and isinstance(arr, da.Array)
-
         if direction == "x":
             coord_lim = self.xlimdata
         elif direction == "y":
             coord_lim = self.ylimdata
         else:  # z
             coord_lim = self.zlimdata
-        coord_lim = coord_lim.compute() if is_computable(coord_lim) else coord_lim
+        coord_lim = self._materialize(coord_lim)
 
         # Plot the mean line
         line = ax.plot(coord_data, mean_data, color=line_color, **kwargs)[0]
@@ -1007,14 +964,9 @@ class Data(BaseProperties):
         else:
             fig = ax.figure
 
-        def is_computable(arr: Union[np.ndarray, da.Array]) -> bool:
-            return self.lazy and isinstance(arr, da.Array)
-
-        data = self.data.compute() if is_computable(self.data) else self.data
-        xdata = self.xdata.compute() if is_computable(self.xdata) else self.xdata
-        xlimdata = (
-            self.xlimdata.compute() if is_computable(self.xlimdata) else self.xlimdata
-        )
+        data = self._materialize(self.data)
+        xdata = self._materialize(self.xdata)
+        xlimdata = self._materialize(self.xlimdata)
 
         if num_dimensions == 1:
             line = ax.plot(xdata, data, **kwargs)[0]
@@ -1025,12 +977,8 @@ class Data(BaseProperties):
 
             return ax, line
         elif num_dimensions == 2:
-            ydata = self.ydata.compute() if is_computable(self.ydata) else self.ydata
-            ylimdata = (
-                self.ylimdata.compute()
-                if is_computable(self.ylimdata)
-                else self.ylimdata
-            )
+            ydata = self._materialize(self.ydata)
+            ylimdata = self._materialize(self.ylimdata)
             X, Y = np.meshgrid(xdata, ydata, indexing="ij")
             mesh = ax.pcolormesh(X, Y, data, cmap=colormap, shading="auto", **kwargs)
             ax.set_title(title if title else self._plot_title)
@@ -1048,18 +996,10 @@ class Data(BaseProperties):
             if slice_axis not in ["x", "y", "z"]:
                 raise ValueError("Slice axis must be 'x', 'y', or 'z'.")
 
-            ydata = self.ydata.compute() if is_computable(self.ydata) else self.ydata
-            ylimdata = (
-                self.ylimdata.compute()
-                if is_computable(self.ylimdata)
-                else self.ylimdata
-            )
-            zdata = self.zdata.compute() if is_computable(self.zdata) else self.zdata
-            zlimdata = (
-                self.zlimdata.compute()
-                if is_computable(self.zlimdata)
-                else self.zlimdata
-            )
+            ydata = self._materialize(self.ydata)
+            ylimdata = self._materialize(self.ylimdata)
+            zdata = self._materialize(self.zdata)
+            zlimdata = self._materialize(self.zlimdata)
 
             initial_slice = 0
             if slice_axis == "x":
@@ -1172,7 +1112,7 @@ class Field(Data):
 
     def _check_compatibility(self, other):
         super()._check_compatibility(other)
-        # super() guarantees type(self) is type(other) — both are Field here.
+
         if self.type != other.type:
             raise ValueError("Field types do not match.")
 
@@ -1197,7 +1137,7 @@ class Phase(Data):
 
     def _check_compatibility(self, other):
         super()._check_compatibility(other)
-        # super() guarantees type(self) is type(other) — both are Phase here.
+
         if self.species != other.species:
             raise ValueError("Phase species do not match.")
 
