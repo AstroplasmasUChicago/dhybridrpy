@@ -65,9 +65,12 @@ class Container:
         return get_data
 
     def __repr__(self) -> str:
+        populated = [(k, v) for k, v in self.data_dict.items() if v]
+        if not populated:
+            return f"{self.type}s at timestep {self.timestep}: (none)"
         data_summary = "\n".join(
             f"  {self.kwarg} = {key}: " + ", ".join(sorted(value.keys()))
-            for key, value in self.data_dict.items()
+            for key, value in populated
         )
         return f"{self.type}s at timestep {self.timestep}:\n{data_summary}"
 
