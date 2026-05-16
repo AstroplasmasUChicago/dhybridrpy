@@ -20,6 +20,8 @@ MAX_H = 1080
 
 app = typer.Typer(add_completion=False)
 
+_VERBOSE = False
+
 
 def print_progress(label: str, current: int, total: int) -> None:
     pct = current / total * 100
@@ -82,7 +84,7 @@ def downsample(data, xdata, ydata):
 
 def vecho(msg: str) -> None:
     """Print only when verbose mode is active."""
-    if getattr(app, "state", {}).get("verbose", False):
+    if _VERBOSE:
         typer.echo(msg)
 
 
@@ -324,7 +326,7 @@ def plot_data_series(
             print_progress(f"  Plotting {label}", i + 1, len(timesteps))
     else:
         # Parallel mode — generator feeds frames on demand, joblib manages backpressure
-        verbose_level = 10 if getattr(app, "state", {}).get("verbose", False) else 0
+        verbose_level = 10 if _VERBOSE else 0
 
         def _load_frames():
             for ts_num in timesteps:
@@ -427,8 +429,8 @@ def run(
         )
         raise typer.Exit(1)
 
-    state = {"verbose": verbose}
-    app.state = state
+    global _VERBOSE
+    _VERBOSE = verbose
 
     try:
         dpy = DHybridrpy(input, output, exclude_timestep_zero=True)
