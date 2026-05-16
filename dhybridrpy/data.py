@@ -328,7 +328,7 @@ class Data(BaseProperties):
         """Return a numpy array for `arr`, calling .compute() if it's a dask array.
 
         Callers should bind `self.data` (or another property) once, then pass it
-        in — accessing `self.data` is a real HDF5 read in non-lazy mode.
+        in. Accessing `self.data` is a real HDF5 read in non-lazy mode.
         """
         if self.lazy and isinstance(arr, da.Array):
             return arr.compute()

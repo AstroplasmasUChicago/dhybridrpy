@@ -97,11 +97,11 @@ def plot_frame(ax, data_obj, colormap, vmin, vmax):
     ndim = data.ndim
     orig_shape = data.shape
     if ndim == 1 or (ndim == 2 and max(data.shape) <= MAX_W):
-        vecho(f"    Data {orig_shape} — no downsampling needed")
+        vecho(f"    Data {orig_shape}: no downsampling needed")
         data_obj.plot(ax=ax, colormap=colormap, vmin=vmin, vmax=vmax)
         return
 
-    # Large 2D data — downsample and render manually
+    # Large 2D data: downsample and render manually
     xdata = data_obj.xdata
     ydata = data_obj.ydata
     if hasattr(xdata, "compute"):
@@ -302,7 +302,7 @@ def plot_data_series(
 
     saved_count = 0
     if jobs == 1:
-        # Sequential mode — no overhead from data extraction or process spawning
+        # Sequential mode: no overhead from data extraction or process spawning
         for i, ts_num in enumerate(timesteps):
             try:
                 data_obj = get_data(dpy.timestep(ts_num))
@@ -325,7 +325,7 @@ def plot_data_series(
                 data_obj._data_dict.clear()
             print_progress(f"  Plotting {label}", i + 1, len(timesteps))
     else:
-        # Parallel mode — generator feeds frames on demand, joblib manages backpressure
+        # Parallel mode: generator feeds frames on demand, joblib manages backpressure
         verbose_level = 10 if _VERBOSE else 0
 
         def _load_frames():
