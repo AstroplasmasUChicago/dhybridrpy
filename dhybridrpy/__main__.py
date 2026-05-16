@@ -51,6 +51,7 @@ def compute_vlim(dpy, get_data, timesteps, pmin=2.0, pmax=98.0):
     sampled = timesteps[indices]
     chunks = []
     for i, ts_num in enumerate(sampled):
+        print_progress("Scanning color range", i + 1, len(sampled))
         try:
             data = get_data(dpy.timestep(ts_num)).data
         except (AttributeError, ValueError, OSError):
@@ -61,7 +62,6 @@ def compute_vlim(dpy, get_data, timesteps, pmin=2.0, pmax=98.0):
             chunks.append(np.asarray(data).ravel())
         except OSError:
             continue
-        print_progress("Scanning color range", i + 1, len(sampled))
     if not chunks:
         typer.echo(
             "  Warning: could not sample any timesteps for color range; "
