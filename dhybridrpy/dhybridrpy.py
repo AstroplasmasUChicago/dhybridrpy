@@ -91,6 +91,7 @@ class DHybridrpy:
     _PHASE_MAPPING = {"FluidVel": "V", "PressureTen": "P"}
     _COMPONENT_MAPPING = {"Intensity": "magnitude"}
     _SPECIES_PATTERN = re.compile(r"\d+")
+    _TIME_NDECIMALS = 6
 
     def __init__(
         self,
@@ -182,13 +183,12 @@ class DHybridrpy:
         self._field_phase_timesteps.add(timestep)
         filepath = os.path.join(dirpath, filename)
         time = self._get_time_from_h5(filepath, timestep)
-        time_ndecimals = 6
         field = Field(
             filepath,
             name,
             timestep,
             time,
-            time_ndecimals,
+            self._TIME_NDECIMALS,
             self.lazy,
             field_type,
         )
@@ -227,13 +227,12 @@ class DHybridrpy:
         self._field_phase_timesteps.add(timestep)
         filepath = os.path.join(dirpath, filename)
         time = self._get_time_from_h5(filepath, timestep)
-        time_ndecimals = 6
         phase = Phase(
             filepath,
             name,
             timestep,
             time,
-            time_ndecimals,
+            self._TIME_NDECIMALS,
             self.lazy,
             species,
         )
