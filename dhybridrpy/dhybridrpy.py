@@ -301,8 +301,13 @@ class DHybridrpy:
         return sorted_ts
 
     def times(self) -> np.ndarray:
-        """Retrieve an array of simulation times corresponding to each field/phase timestep."""
-        return np.array([self._timestep_times[ts] for ts in self.timesteps()])
+        """Retrieve an array of simulation times corresponding to each field/phase timestep.
+
+        Returns NaN for any timestep whose TIME attribute could not be read.
+        """
+        return np.array(
+            [self._timestep_times.get(ts, np.nan) for ts in self.timesteps()]
+        )
 
     def raw_timesteps(self) -> np.ndarray:
         """Retrieve an array of the timesteps for raw particle data."""
@@ -314,8 +319,13 @@ class DHybridrpy:
         return sorted_ts
 
     def raw_times(self) -> np.ndarray:
-        """Retrieve an array of simulation times corresponding to each raw timestep."""
-        return np.array([self._timestep_times[ts] for ts in self.raw_timesteps()])
+        """Retrieve an array of simulation times corresponding to each raw timestep.
+
+        Returns NaN for any timestep whose TIME attribute could not be read.
+        """
+        return np.array(
+            [self._timestep_times.get(ts, np.nan) for ts in self.raw_timesteps()]
+        )
 
     def _discover_tracks(self) -> None:
         """Discover track files in the output folder."""
