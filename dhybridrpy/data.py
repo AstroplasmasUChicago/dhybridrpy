@@ -391,7 +391,7 @@ class Data(BaseProperties):
         """Retrieve the z (i.e. X3) grid axis limits."""
         return self._get_coordinate_limits("X3 AXIS")
 
-    def _check_compatability(self, other) -> None:
+    def _check_compatibility(self, other) -> None:
         """Raise if 'self' and 'other' cannot be operated on together."""
 
         if type(self) is not type(other):
@@ -411,7 +411,7 @@ class Data(BaseProperties):
         """Apply a binary operation to self and another Data object or scalar."""
 
         if isinstance(other, Data):
-            self._check_compatability(other)
+            self._check_compatibility(other)
             result = op(self.data, other.data)
             other_name = other.name
         else:
@@ -526,7 +526,7 @@ class Data(BaseProperties):
         if data_operands:
             ref = data_operands[0]
             for other in data_operands[1:]:
-                ref._check_compatability(other)
+                ref._check_compatibility(other)
 
         # Execute the ufunc on the underlying arrays
         result_array = ufunc(*raw_inputs, **kwargs)
@@ -1167,8 +1167,8 @@ class Field(Data):
         self.type = field_type  # The type of field, e.g., "External"
         self._plot_title += f" (type = {self.type})"
 
-    def _check_compatability(self, other):
-        super()._check_compatability(other)
+    def _check_compatibility(self, other):
+        super()._check_compatibility(other)
         if isinstance(other, Field) and self.type != other.type:
             raise ValueError("Field types do not match.")
 
@@ -1191,8 +1191,8 @@ class Phase(Data):
         self.species = species
         self._plot_title += f" (species = {self.species})"
 
-    def _check_compatability(self, other):
-        super()._check_compatability(other)
+    def _check_compatibility(self, other):
+        super()._check_compatibility(other)
         if isinstance(other, Phase) and self.species != other.species:
             raise ValueError("Phase species do not match.")
 
@@ -1220,7 +1220,7 @@ class Raw(BaseProperties):
         Always re-reads from HDF5 (or returns fresh dask-delayed views) to
         avoid OOM when iterating over many timesteps. Matches Data.data.
         """
-        result: dict = {}
+        result = {}
         with h5py.File(self.file_path, "r") as file:
             for key in file.keys():
                 if self.lazy:
