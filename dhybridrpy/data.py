@@ -464,6 +464,13 @@ class Data(BaseProperties):
     ):
         """Create a new Data instance with the result of the operation."""
 
+        result_shape = getattr(result_array, "shape", ())
+        if result_shape == ():
+            raise ValueError(
+                f"Operation '{op_symbol or other_name}' produced a 0-d result; "
+                f"Data objects must have at least 1 dimension."
+            )
+
         file_path = (
             other_obj.file_path if isinstance(other_obj, Data) else self.file_path
         )
