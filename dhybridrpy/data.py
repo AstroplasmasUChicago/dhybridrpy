@@ -1137,9 +1137,18 @@ class Data(BaseProperties):
 
                 ax.set_title(title if title else f"{self._plot_title}{position_str}")
                 mesh.set_array(data_slice.ravel())
+                # Rescale color limits to the new slice's data range so the
+                # colorbar reflects what is being shown.
+                mesh.set_clim(float(data_slice.min()), float(data_slice.max()))
                 fig.canvas.draw_idle()
 
             slider.on_changed(update)
+            # Keep a strong reference to the slider on the Figure so it
+            # isn't garbage collected after this function returns (which
+            # would silently break the widget on some matplotlib backends).
+            if not hasattr(fig, "_dhybridrpy_widgets"):
+                fig._dhybridrpy_widgets = []
+            fig._dhybridrpy_widgets.append(slider)
             return ax, mesh
 
 
