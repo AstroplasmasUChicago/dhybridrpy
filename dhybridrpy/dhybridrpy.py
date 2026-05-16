@@ -124,7 +124,10 @@ class DHybridrpy:
             self.start_time = time_dict["t0"]
         except KeyError as e:
             missing_key = e.args[0]
-            raise KeyError(f"Key '{missing_key}' not found in 'inputs' dictionary.")
+            raise KeyError(
+                f"Required key '{missing_key}' not found in input file's "
+                f"'time' section."
+            ) from e
 
     def _validate_paths(self) -> None:
         if not os.path.exists(self.input_file):
