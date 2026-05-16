@@ -104,8 +104,6 @@ class DHybridrpy:
         self.output_folder = output_folder
         self.lazy = lazy
         self.exclude_timestep_zero = exclude_timestep_zero
-        self._FIELD_NAMES = set()
-        self._PHASE_NAMES = set()
         self._timesteps_dict = {}
         self._sorted_timesteps_cache = {}
         self._field_phase_timesteps = set()
@@ -177,7 +175,6 @@ class DHybridrpy:
             return
 
         name = f"{prefix}{component}"
-        self._FIELD_NAMES.add(name)
         if timestep not in self._timesteps_dict:
             self._timesteps_dict[timestep] = Timestep(timestep)
         self._field_phase_timesteps.add(timestep)
@@ -216,7 +213,6 @@ class DHybridrpy:
         if name == "x3x2x1" and "pres" in filename:
             name = "P"
 
-        self._PHASE_NAMES.add(name)
         species = (
             int(self._SPECIES_PATTERN.search(species_str).group())
             if species_str != "Total"
