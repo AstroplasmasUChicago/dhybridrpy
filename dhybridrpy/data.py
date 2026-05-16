@@ -4,7 +4,6 @@ import dask.array as da
 import matplotlib.pyplot as plt
 import operator
 from matplotlib.widgets import Slider
-from collections import defaultdict
 
 from matplotlib.axes import Axes
 from matplotlib.collections import QuadMesh
@@ -275,32 +274,34 @@ class Data(BaseProperties):
     _PTOT = "$p_{tot} / (m_i v_A)$"
     _ETOT = r"$\ln\left(\frac{e_{tot}}{m_i v_A^2}\right)$"
 
-    _LABEL_MAPPINGS = defaultdict(
-        lambda: (Data._X, Data._Y),
-        {
-            "p1x1": (_X, _PX),
-            "p1x2": (_Y, _PX),
-            "p1x3": (_Z, _PX),
-            "p2x1": (_X, _PY),
-            "p2x2": (_Y, _PY),
-            "p2x3": (_Z, _PY),
-            "p3x1": (_X, _PZ),
-            "p3x2": (_Y, _PZ),
-            "p3x3": (_Z, _PZ),
-            "x2x1": (_X, _Y),
-            "x3x1": (_X, _Z),
-            "x3x2": (_Y, _Z),
-            "p2p1": (_PX, _PY),
-            "p3p1": (_PX, _PZ),
-            "p3p2": (_PY, _PZ),
-            "ptx1": (_X, _PTOT),
-            "ptx2": (_Y, _PTOT),
-            "ptx3": (_Z, _PTOT),
-            "etx1": (_X, _ETOT),
-            "etx2": (_Y, _ETOT),
-            "etx3": (_Z, _ETOT),
-        },
-    )
+    _LABEL_MAPPINGS = {
+        "p1x1": (_X, _PX),
+        "p1x2": (_Y, _PX),
+        "p1x3": (_Z, _PX),
+        "p2x1": (_X, _PY),
+        "p2x2": (_Y, _PY),
+        "p2x3": (_Z, _PY),
+        "p3x1": (_X, _PZ),
+        "p3x2": (_Y, _PZ),
+        "p3x3": (_Z, _PZ),
+        "x2x1": (_X, _Y),
+        "x3x1": (_X, _Z),
+        "x3x2": (_Y, _Z),
+        "p2p1": (_PX, _PY),
+        "p3p1": (_PX, _PZ),
+        "p3p2": (_PY, _PZ),
+        "ptx1": (_X, _PTOT),
+        "ptx2": (_Y, _PTOT),
+        "ptx3": (_Z, _PTOT),
+        "etx1": (_X, _ETOT),
+        "etx2": (_Y, _ETOT),
+        "etx3": (_Z, _ETOT),
+    }
+
+    @classmethod
+    def _axis_labels(cls, name: str) -> tuple:
+        """Look up plot axis labels for a Data name, falling back to (x, y)."""
+        return cls._LABEL_MAPPINGS.get(name, (cls._X, cls._Y))
 
     # For derived object plot titles
     _BINOP_SYMBOL = {"add": "+", "sub": "-", "mul": "*", "truediv": "/", "pow": "^"}
@@ -1047,7 +1048,7 @@ class Data(BaseProperties):
             X, Y = np.meshgrid(xdata, ydata, indexing="ij")
             mesh = ax.pcolormesh(X, Y, data, cmap=colormap, shading="auto", **kwargs)
             ax.set_title(title if title else self._plot_title)
-            xlabel_default, ylabel_default = self._LABEL_MAPPINGS[self.name]
+            xlabel_default, ylabel_default = self._axis_labels(self.name)
             ax.set_xlabel(xlabel if xlabel else xlabel_default)
             ax.set_ylabel(ylabel if ylabel else ylabel_default)
             ax.set_xlim(xlim if xlim else xlimdata)

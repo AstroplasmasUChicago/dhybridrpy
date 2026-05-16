@@ -115,7 +115,7 @@ def plot_frame(ax, data_obj, colormap, vmin, vmax):
         X, Y, data, cmap=colormap, shading="auto", vmin=vmin, vmax=vmax
     )
     ax.set_title(data_obj._plot_title)
-    xlabel, ylabel = Data._LABEL_MAPPINGS[data_obj.name]
+    xlabel, ylabel = Data._axis_labels(data_obj.name)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_xlim(data_obj.xlimdata)
@@ -200,7 +200,7 @@ def _render_one_frame(frame_data, label, plot_dir, colormap, dpi, vmin, vmax):
             mesh = ax.pcolormesh(
                 X, Y, data, cmap=colormap, shading="auto", vmin=vmin, vmax=vmax
             )
-            xlabel, ylabel = Data._LABEL_MAPPINGS[name]
+            xlabel, ylabel = Data._axis_labels(name)
             ax.set_xlabel(xlabel)
             ax.set_ylabel(ylabel)
             ax.set_xlim(xlim)
