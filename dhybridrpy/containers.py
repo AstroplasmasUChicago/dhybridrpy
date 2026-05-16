@@ -46,8 +46,8 @@ class Container:
                 args[0] if args else kwargs.get(self.kwarg, self.default_kwarg_value)
             )
 
-            # If data_key is a string, make sure it's capitalized
-            if isinstance(data_key, str) and not data_key.isupper():
+            # Normalize string keys so 'total'/'Total'/'TOTAL' all resolve.
+            if isinstance(data_key, str):
                 data_key = data_key.capitalize()
 
             # Check if data_key, data_name (e.g. "Total", "Bx") exist in data_dict at this timestep
