@@ -410,6 +410,11 @@ class Data(BaseProperties):
     def _check_compatability(self, other) -> None:
         """Raise if 'self' and 'other' cannot be operated on together."""
 
+        if type(self) is not type(other):
+            raise TypeError(
+                f"Cannot combine {type(self).__name__} with "
+                f"{type(other).__name__}: operands must be the same subclass."
+            )
         if self._get_data_shape() != other._get_data_shape():
             raise ValueError(
                 f"Incompatible grid shapes: {self._get_data_shape()} vs "
