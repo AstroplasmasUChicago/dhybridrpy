@@ -352,8 +352,10 @@ def plot_data_series(
         typer.echo(f"  Saved {saved_count} frames to {plot_dir}")
 
     # Create video if requested
-    if video:
+    if video and saved_count > 0:
         make_video(plot_dir, label, fps)
+    elif video:
+        typer.echo(f"  Skipping video: no frames saved", err=True)
 
 
 @app.command()
