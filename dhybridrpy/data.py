@@ -1172,7 +1172,8 @@ class Field(Data):
 
     def _check_compatibility(self, other):
         super()._check_compatibility(other)
-        if isinstance(other, Field) and self.type != other.type:
+        # super() guarantees type(self) is type(other) — both are Field here.
+        if self.type != other.type:
             raise ValueError("Field types do not match.")
 
     def _extra_init_args(self):
@@ -1196,7 +1197,8 @@ class Phase(Data):
 
     def _check_compatibility(self, other):
         super()._check_compatibility(other)
-        if isinstance(other, Phase) and self.species != other.species:
+        # super() guarantees type(self) is type(other) — both are Phase here.
+        if self.species != other.species:
             raise ValueError("Phase species do not match.")
 
     def _extra_init_args(self):
