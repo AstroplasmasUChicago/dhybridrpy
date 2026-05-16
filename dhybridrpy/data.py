@@ -490,7 +490,7 @@ class Data(BaseProperties):
         return self._apply_operation(other, operator.pow)
 
     def __neg__(self):
-        return self * (-1)
+        return self._create_new_instance(-self.data, "", f"-{self.name}", self)
 
     def __radd__(self, other):
         return self.__add__(other)
@@ -499,13 +499,16 @@ class Data(BaseProperties):
         return self.__mul__(other)
 
     def __rsub__(self, other):
-        return (-self).__add__(other)
+        return self._create_new_instance(
+            other - self.data, "", f"{other}-{self.name}", self
+        )
 
     def __rtruediv__(self, other):
-        return self.__pow__(-1) * other
+        return self._create_new_instance(
+            other / self.data, "", f"{other}/{self.name}", self
+        )
 
-        # Ensure that mixed Data and NumPy operations produce a Data object
-
+    # Ensure that mixed Data and NumPy operations produce a Data object
     __array_priority__ = 20
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
