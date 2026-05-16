@@ -213,11 +213,17 @@ class DHybridrpy:
         if name == "x3x2x1" and "pres" in filename:
             name = "P"
 
-        species = (
-            int(self._SPECIES_PATTERN.search(species_str).group())
-            if species_str != "Total"
-            else species_str
-        )
+        if species_str == "Total":
+            species = species_str
+        else:
+            match = self._SPECIES_PATTERN.search(species_str)
+            if match is None:
+                logger.warning(
+                    f"Could not parse species from folder '{species_str}'; "
+                    f"skipping {filename}"
+                )
+                return
+            species = int(match.group())
         if timestep not in self._timesteps_dict:
             self._timesteps_dict[timestep] = Timestep(timestep)
         self._field_phase_timesteps.add(timestep)
@@ -239,7 +245,14 @@ class DHybridrpy:
     ) -> None:
         name = "raw"
         species_str = folder_components[-1]
-        species = int(self._SPECIES_PATTERN.search(species_str).group())
+        match = self._SPECIES_PATTERN.search(species_str)
+        if match is None:
+            logger.warning(
+                f"Could not parse species from folder '{species_str}'; "
+                f"skipping {filename}"
+            )
+            return
+        species = int(match.group())
         if timestep not in self._timesteps_dict:
             self._timesteps_dict[timestep] = Timestep(timestep)
         self._raw_timesteps.add(timestep)
