@@ -184,9 +184,13 @@ def print_available(dpy: DHybridrpy) -> None:
 
 
 def _render_one_frame(frame_data, label, plot_dir, colormap, dpi, vmin, vmax):
-    """Render and save a single frame from pre-extracted data. Called by joblib."""
+    """Render and save a single frame from pre-extracted data. Called by joblib.
+
+    Returns True if the frame was successfully saved, False on OSError.
+    """
     data, xdata, ydata, xlim, ylim, name, title, ts_num = frame_data
     fig = None
+    saved = False
     try:
         fig, ax = plt.subplots(figsize=(10, 6), dpi=dpi)
 
@@ -210,11 +214,13 @@ def _render_one_frame(frame_data, label, plot_dir, colormap, dpi, vmin, vmax):
         ax.set_title(title)
         filename = f"{label}_{ts_num:08d}.png"
         fig.savefig(os.path.join(plot_dir, filename), bbox_inches="tight")
+        saved = True
     except OSError:
         pass
     finally:
         if fig is not None:
             plt.close(fig)
+    return saved
 
 
 def _extract_frame_data(dpy, get_data, ts_num):
@@ -292,6 +298,7 @@ def plot_data_series(
                 f"(percentiles {pmin:g}/{pmax:g})"
             )
 
+    saved_count = 0
     if jobs == 1:
         # Sequential mode — no overhead from data extraction or process spawning
         for i, ts_num in enumerate(timesteps):
@@ -307,6 +314,7 @@ def plot_data_series(
                 plot_frame(ax, data_obj, colormap, vmin, vmax)
                 filename = f"{label}_{ts_num:08d}.png"
                 fig.savefig(os.path.join(plot_dir, filename), bbox_inches="tight")
+                saved_count += 1
             except OSError:
                 pass
             finally:
@@ -324,14 +332,22 @@ def plot_data_series(
                 if frame is not None:
                     yield frame
 
-        Parallel(n_jobs=jobs, verbose=verbose_level)(
+        results = Parallel(n_jobs=jobs, verbose=verbose_level)(
             delayed(_render_one_frame)(
                 frame, label, plot_dir, colormap, dpi, vmin, vmax
             )
             for frame in _load_frames()
         )
+        saved_count = sum(1 for ok in results if ok)
 
-    typer.echo(f"  Saved {len(timesteps)} frames to {plot_dir}")
+    total = len(timesteps)
+    if saved_count < total:
+        typer.echo(
+            f"  Saved {saved_count} of {total} frames to {plot_dir} "
+            f"({total - saved_count} skipped)"
+        )
+    else:
+        typer.echo(f"  Saved {saved_count} frames to {plot_dir}")
 
     # Create video if requested
     if video:
