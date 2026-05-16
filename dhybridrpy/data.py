@@ -204,16 +204,25 @@ def fft_power_1d_slices(
     power = np.moveaxis(power, axis, -1)
     power_spectra = power.reshape(-1, power.shape[-1])
 
-    # Compute statistics in log space
-    power_spectra_safe = np.maximum(power_spectra, 1e-50)
-    log_power = np.log(power_spectra_safe)
+    # Geometric statistics in log space, computed only over positive entries
+    # per bin. Bins where every slice has zero power return 0 for mean/lo/hi
+    # rather than the previous hardcoded 1e-50 floor.
+    positive = power_spectra > 0
+    with np.errstate(divide="ignore"):
+        log_power = np.where(positive, np.log(power_spectra), 0.0)
 
-    log_mean = np.mean(log_power, axis=0)
-    log_std = np.std(log_power, axis=0)
+    count = positive.sum(axis=0)
+    sum_log = log_power.sum(axis=0)
+    sum_log_sq = (log_power ** 2).sum(axis=0)
 
-    power_mean = np.exp(log_mean)
-    power_std_lower = np.exp(log_mean - log_std)
-    power_std_upper = np.exp(log_mean + log_std)
+    safe_count = np.where(count > 0, count, 1)
+    log_mean = sum_log / safe_count
+    log_var = sum_log_sq / safe_count - log_mean ** 2
+    log_std = np.sqrt(np.maximum(log_var, 0.0))
+
+    power_mean = np.where(count > 0, np.exp(log_mean), 0.0)
+    power_std_lower = np.where(count > 0, np.exp(log_mean - log_std), 0.0)
+    power_std_upper = np.where(count > 0, np.exp(log_mean + log_std), 0.0)
 
     return k, power_mean, power_std_lower, power_std_upper
 
