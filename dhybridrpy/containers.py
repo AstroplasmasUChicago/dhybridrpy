@@ -24,6 +24,11 @@ class Container:
         self.default_kwarg_value = default_kwarg_value
 
     def __getattr__(self, data_name: str) -> Callable:
+        # Don't intercept dunder lookups (e.g. __deepcopy__, __getstate__);
+        # otherwise copy.deepcopy/pickle/hasattr misbehave.
+        if data_name.startswith("__") and data_name.endswith("__"):
+            raise AttributeError(data_name)
+
         def get_data(*args, **kwargs) -> Union[Field, Phase, Raw]:
 
             # Ensure there's at most one argument
