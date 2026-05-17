@@ -519,7 +519,14 @@ class Data(BaseProperties):
             self.lazy,
             *self._extra_init_args(),
         )
-        inst._data_dict = {k: v for k, v in self._data_dict.items() if "AXIS" in k}
+        # Only carry over cached AXIS coords/lims if shape didn't change;
+        # otherwise the cached arrays would be the wrong length.
+        if tuple(result_array.shape) == self._get_data_shape():
+            inst._data_dict = {
+                k: v for k, v in self._data_dict.items() if "AXIS" in k
+            }
+        else:
+            inst._data_dict = {}
         inst._data_dict[new_name] = result_array
         inst._data_shape = tuple(result_array.shape)
         inst._data_dtype = getattr(result_array, "dtype", None)
