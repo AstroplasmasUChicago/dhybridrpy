@@ -322,6 +322,33 @@ class Data(BaseProperties):
             self._data_dict[key] = delta * grid + (delta / 2) + axis_limits[0]
         return self._data_dict[key]
 
+    def _read_2d_slice(
+        self, slice_axis: Literal["x", "y", "z"], idx: int
+    ) -> np.ndarray:
+        """Return a single 2D slice of 3D data without materializing the full cube.
+
+        For derived Data (where the result is already in memory), this slices
+        the cached array. For HDF5-backed Data, this issues a partial read so
+        the slider doesn't have to hold the entire 3D volume.
+        """
+        if self.name in self._data_dict:
+            arr = self._materialize(self._data_dict[self.name])
+            if slice_axis == "x":
+                return arr[idx, :, :]
+            if slice_axis == "y":
+                return arr[:, idx, :]
+            return arr[:, :, idx]
+
+        # HDF5 stores (nz, ny, nx); after the .T in `data`, the numpy convention
+        # is (nx, ny, nz). Mirror that here while reading only what's needed.
+        with h5py.File(self.file_path, "r") as f:
+            ds = f["DATA"]
+            if slice_axis == "x":
+                return np.asarray(ds[:, :, idx]).T  # -> (ny, nz)
+            if slice_axis == "y":
+                return np.asarray(ds[:, idx, :]).T  # -> (nx, nz)
+            return np.asarray(ds[idx, :, :]).T  # -> (nx, ny)
+
     def _materialize(
         self, arr: Union[np.ndarray, da.Array]
     ) -> np.ndarray:
@@ -577,8 +604,7 @@ class Data(BaseProperties):
         if isinstance(result_array, tuple):
             raise NotImplementedError(
                 f"Multi-output ufunc {ufunc.__name__!r} is not supported on "
-                f"Data objects. Compute on .data directly and wrap the outputs "
-                f"yourself if needed."
+                f"Data objects. Compute on .data directly."
             )
 
         # Build a descriptive name: e.g. "sin(By)"
@@ -996,7 +1022,10 @@ class Data(BaseProperties):
         else:
             fig = ax.figure
 
-        data = self._materialize(self.data)
+        # For 3D we only need partial slices, so defer materializing `data` to
+        # the slicing helper. For 1D/2D the full array is the plot.
+        if num_dimensions < 3:
+            data = self._materialize(self.data)
         xdata = self._materialize(self.xdata)
         xlimdata = self._materialize(self.xlimdata)
 
@@ -1034,51 +1063,33 @@ class Data(BaseProperties):
             zlimdata = self._materialize(self.zlimdata)
 
             initial_slice = 0
+            initial_data_slice = self._read_2d_slice(slice_axis, initial_slice)
             if slice_axis == "x":
-                Y, Z = np.meshgrid(ydata, zdata, indexing="ij")
-                mesh = ax.pcolormesh(
-                    Y,
-                    Z,
-                    data[initial_slice, :, :],
-                    cmap=colormap,
-                    shading="auto",
-                    **kwargs,
-                )
+                A, B = np.meshgrid(ydata, zdata, indexing="ij")
                 initial_position_str = f"\nx = {xdata[initial_slice]:.2f}"
                 ax.set_xlabel(ylabel if ylabel else "$y$")
                 ax.set_ylabel(zlabel if zlabel else "$z$")
                 ax.set_xlim(ylim if ylim else ylimdata)
                 ax.set_ylim(zlim if zlim else zlimdata)
             elif slice_axis == "y":
-                X, Z = np.meshgrid(xdata, zdata, indexing="ij")
-                mesh = ax.pcolormesh(
-                    X,
-                    Z,
-                    data[:, initial_slice, :],
-                    cmap=colormap,
-                    shading="auto",
-                    **kwargs,
-                )
+                A, B = np.meshgrid(xdata, zdata, indexing="ij")
                 initial_position_str = f"\ny = {ydata[initial_slice]:.2f}"
                 ax.set_xlabel(xlabel if xlabel else "$x$")
                 ax.set_ylabel(zlabel if zlabel else "$z$")
                 ax.set_xlim(xlim if xlim else xlimdata)
                 ax.set_ylim(zlim if zlim else zlimdata)
             else:
-                X, Y = np.meshgrid(xdata, ydata, indexing="ij")
-                mesh = ax.pcolormesh(
-                    X,
-                    Y,
-                    data[:, :, initial_slice],
-                    cmap=colormap,
-                    shading="auto",
-                    **kwargs,
-                )
+                A, B = np.meshgrid(xdata, ydata, indexing="ij")
                 initial_position_str = f"\nz = {zdata[initial_slice]:.2f}"
                 ax.set_xlabel(xlabel if xlabel else "$x$")
                 ax.set_ylabel(ylabel if ylabel else "$y$")
                 ax.set_xlim(xlim if xlim else xlimdata)
                 ax.set_ylim(ylim if ylim else ylimdata)
+
+            mesh = ax.pcolormesh(
+                A, B, initial_data_slice,
+                cmap=colormap, shading="auto", **kwargs,
+            )
 
             ax.set_title(
                 title if title else f"{self._plot_title}{initial_position_str}"
@@ -1088,26 +1099,25 @@ class Data(BaseProperties):
                 cbar.set_label(colorbar_label if colorbar_label else f"{self.name}")
 
             ax_slider = fig.add_axes([0.2, 0.05, 0.6, 0.03])
-            data_shape = data.shape[{"x": 0, "y": 1, "z": 2}[slice_axis]]
+            full_shape = self._get_data_shape()
+            n_along = full_shape[{"x": 0, "y": 1, "z": 2}[slice_axis]]
             slider = Slider(
                 ax_slider,
                 f"{slice_axis.capitalize()} axis slice",
                 0,
-                data_shape - 1,
+                n_along - 1,
                 valinit=initial_slice,
                 valstep=1,
             )
 
             def update(val: float) -> None:
                 slice_index = int(slider.val)
+                data_slice = self._read_2d_slice(slice_axis, slice_index)
                 if slice_axis == "x":
-                    data_slice = data[slice_index, :, :]
                     position_str = f"\nx = {xdata[slice_index]:.2f}"
                 elif slice_axis == "y":
-                    data_slice = data[:, slice_index, :]
                     position_str = f"\ny = {ydata[slice_index]:.2f}"
                 else:
-                    data_slice = data[:, :, slice_index]
                     position_str = f"\nz = {zdata[slice_index]:.2f}"
 
                 ax.set_title(title if title else f"{self._plot_title}{position_str}")
