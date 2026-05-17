@@ -4,7 +4,8 @@ version = "v1.10"
 description = "A Python package to easily read input + output data from dHybridR."
 readme = "README.md"
 requires-python = ">=3.8"
-license = {file = "LICENSE.txt"}
+license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
 dependencies = [
     "h5py",
     "matplotlib",
@@ -24,5 +25,5 @@ Homepage = "https://github.com/AstroplasmasUChicago/dhybridrpy"
 dplot = "dhybridrpy.__main__:main"
 
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
