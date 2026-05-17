@@ -570,6 +570,17 @@ class Data(BaseProperties):
         if not data_operands:
             return result_array
 
+        # Multi-output ufuncs (np.modf, np.divmod, np.frexp, ...) return a
+        # tuple. Wrapping each output in its own Data needs a unique name per
+        # output and isn't currently implemented; reject explicitly so the user
+        # gets a clear message instead of a misleading "0-d result" further down.
+        if isinstance(result_array, tuple):
+            raise NotImplementedError(
+                f"Multi-output ufunc {ufunc.__name__!r} is not supported on "
+                f"Data objects. Compute on .data directly and wrap the outputs "
+                f"yourself if needed."
+            )
+
         # Build a descriptive name: e.g. "sin(By)"
         names = ",".join(
             obj.name if isinstance(obj, Data) else self._short_operand_name(obj)
