@@ -4,19 +4,22 @@ version = "v1.10"
 description = "A Python package to easily read input + output data from dHybridR."
 readme = "README.md"
 requires-python = ">=3.8"
+license = {file = "LICENSE.txt"}
 dependencies = [
     "h5py",
     "matplotlib",
     "numpy",
-    "ruff",
-    "h5py",
     "f90nml",
-    "pre-commit",
     "dask",
     "typer>=0.20.1",
     "joblib>=1.4.2",
 ]
-license = {file = "LICENSE.txt"}
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "pre-commit",
+]
 
 [project.urls]
 Homepage = "https://github.com/AstroplasmasUChicago/dhybridrpy"
