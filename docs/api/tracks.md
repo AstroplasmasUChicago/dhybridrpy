@@ -4,19 +4,8 @@ Classes for accessing particle track data from dHybridR simulations.
 
 ## Track
 
-Represents a single particle track across all timesteps.
-
-### Class Definition
-
-```python
-class Track(
-    file_path: str,
-    group_name: str,
-    track_id: str,
-    species: int,
-    lazy: bool = False
-)
-```
+Represents a single particle track across all timesteps. Obtained via
+[`dpy.track(track_id, species=...)`](#tracktrack_id-str-species-int--1---track).
 
 ### Attributes
 
@@ -92,17 +81,8 @@ n = track.n  # e.g., [10, 20, 30, ...]
 
 ## TrackCollection
 
-Collection of all tracks for a given species. Supports iteration and indexing.
-
-### Class Definition
-
-```python
-class TrackCollection(
-    file_path: str,
-    species: int,
-    lazy: bool = False
-)
-```
+Collection of all tracks for a given species. Discovered and constructed
+automatically by `DHybridrpy` when track files are present in the output folder.
 
 ### Attributes
 

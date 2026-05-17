@@ -195,10 +195,10 @@ print(f"t0 = {dpy.start_time}")
 ### Iterating Over Timesteps
 
 ```python
-for ts in dpy.timesteps():
-    ts = dpy.timestep(ts)
+for ts_num in dpy.timesteps():
+    ts = dpy.timestep(ts_num)
     Bx = ts.fields.Bx()
-    print(f"Timestep {ts}: Bx max = {Bx.data.max()}")
+    print(f"Timestep {ts_num}: Bx max = {Bx.data.max()}")
 ```
 
 ### With Lazy Loading

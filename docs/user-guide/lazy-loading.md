@@ -104,20 +104,9 @@ Bx = dpy.timestep(1).fields.Bx()
 print(Bx.data.chunks)  # e.g., ((256, 256), (128, 128))
 ```
 
-## When to Use Lazy Loading
-
-| Scenario | Recommendation |
-|----------|---------------|
-| Small datasets (< 1 GB) | `lazy=False` (default) |
-| Large datasets (> 1 GB) | `lazy=True` |
-| Many timesteps | `lazy=True` |
-| Quick exploration | `lazy=False` |
-| Batch processing | `lazy=True` |
-| Interactive plotting | Either (handled automatically) |
-
 ## Performance Tips
 
-### 1. Minimize Compute Calls
+### Minimize Compute Calls
 
 ```python
 # Less efficient: multiple compute calls
@@ -129,11 +118,7 @@ import dask
 mean_val, std_val = dask.compute(Bx.data.mean(), Bx.data.std())
 ```
 
-### 2. Use Appropriate Chunk Sizes
-
-Dask chooses reasonable defaults, but you can optimize for your use case.
-
-### 3. Consider Memory vs. Speed Trade-offs
+### Consider Memory vs. Speed Trade-offs
 
 Lazy loading reduces memory usage but may be slower for small datasets due to the overhead of building task graphs.
 

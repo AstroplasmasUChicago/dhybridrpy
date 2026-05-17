@@ -108,19 +108,19 @@ By default, plots are saved under a `plots/` directory. The structure mirrors th
 plots/
 ├── Fields/
 │   ├── Bx/
-│   │   ├── Bx_000001.png
-│   │   ├── Bx_000002.png
+│   │   ├── Bx_00000001.png
+│   │   ├── Bx_00000002.png
 │   │   ├── ...
 │   │   └── Bx.mp4          # if --video is used
 │   └── By/
-│       ├── By_000001.png
+│       ├── By_00000001.png
 │       └── ...
 └── Phases/
     ├── p1x1_Sp01/
-    │   ├── p1x1_Sp01_000001.png
+    │   ├── p1x1_Sp01_00000001.png
     │   └── ...
     └── p1x1_Sp03/
-        ├── p1x1_Sp03_000001.png
+        ├── p1x1_Sp03_00000001.png
         └── ...
 ```
 

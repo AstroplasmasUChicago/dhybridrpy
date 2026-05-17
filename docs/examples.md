@@ -232,7 +232,8 @@ raw = dpy.timestep(1).raw_files.raw(species=1)
 data = raw.dict
 print("Available quantities:", list(data.keys()))
 
-# Get positions and momenta
+# Get positions and proper velocity components. In dHybridR, p1/p2/p3 are
+# proper velocity (gamma*v), not 3-velocity or momentum.
 x = data['x1']
 p = data['p1']
 
@@ -611,42 +612,6 @@ anisotropy = power_x[valid] / power_y[valid]
 
 print(f"Mean anisotropy (Px/Py): {np.mean(anisotropy):.2f}")
 print(f"Anisotropy > 1 means more power in x direction")
-```
-
-## Saving Results
-
-### Export to NumPy
-
-```python
-import numpy as np
-
-Bx = dpy.timestep(1).fields.Bx()
-
-# Save data array
-np.save("Bx_data.npy", Bx.data)
-
-# Save coordinates
-np.savez(
-    "Bx_full.npz",
-    data=Bx.data,
-    x=Bx.xdata,
-    y=Bx.ydata
-)
-```
-
-### Export to CSV
-
-```python
-import pandas as pd
-import numpy as np
-
-# For 1D data
-Bx = dpy.timestep(1).fields.Bx()
-df = pd.DataFrame({
-    'x': Bx.xdata,
-    'Bx': Bx.data
-})
-df.to_csv("Bx_1d.csv", index=False)
 ```
 
 ## See Also

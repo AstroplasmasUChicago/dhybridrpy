@@ -34,26 +34,6 @@ dhybridrpy depends on the following packages, which are automatically installed:
 | `matplotlib` | Plotting and visualization |
 | `dask` | Lazy loading for large datasets |
 | `f90nml` | Parsing Fortran namelist input files |
+| `typer` | Command-line interface for the `dplot` tool |
+| `joblib` | Parallel rendering in the `dplot` tool |
 
-## Verifying Installation
-
-To verify that dhybridrpy is installed correctly:
-
-```python
-import dhybridrpy
-print(dhybridrpy.__all__)
-```
-
-This should output:
-
-```
-['DHybridrpy', 'Timestep', 'Field', 'Phase', 'Raw', 'Track', 'TrackCollection', 'fft_power_iso', 'fft_power_1d_slices']
-```
-
-## Upgrading
-
-To upgrade to the latest version:
-
-```bash
-pip install --upgrade dhybridrpy
-```

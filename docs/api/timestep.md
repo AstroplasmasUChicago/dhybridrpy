@@ -1,18 +1,9 @@
 # Timestep
 
 Container class for accessing field, phase, and raw data at a specific timestep.
-
-## Class Definition
-
-```python
-class Timestep(timestep: int)
-```
-
-### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `timestep` | `int` | The timestep number |
+Obtained via [`dpy.timestep(ts)`](dhybridrpy.md#timestepts-int---timestep),
+[`dpy.timestep_closest(...)`](dhybridrpy.md#timestep_closestts-int-verbose-bool--false---timestep),
+or [`dpy.timestep_index(...)`](dhybridrpy.md#timestep_indexindex-int---timestep).
 
 ### Attributes
 

@@ -4,21 +4,8 @@ This page documents the data classes: `Field`, `Phase`, and `Raw`.
 
 ## Field
 
-Represents electromagnetic field data (B, E, J) on the simulation grid.
-
-### Class Definition
-
-```python
-class Field(
-    file_path: str,
-    name: str,
-    timestep: int,
-    time: float,
-    time_ndecimals: int,
-    lazy: bool,
-    field_type: str
-)
-```
+Represents electromagnetic field data (B, E, J) on the simulation grid. Obtained
+via `dpy.timestep(ts).fields.<name>(type=...)` (see [Timestep](timestep.md)).
 
 ### Attributes
 
@@ -59,21 +46,8 @@ print(Bx.data.shape) # e.g., (256, 128)
 
 ## Phase
 
-Represents phase space data (distribution functions, fluid quantities).
-
-### Class Definition
-
-```python
-class Phase(
-    file_path: str,
-    name: str,
-    timestep: int,
-    time: float,
-    time_ndecimals: int,
-    lazy: bool,
-    species: Union[int, str]
-)
-```
+Represents phase space data (distribution functions, fluid quantities). Obtained
+via `dpy.timestep(ts).phases.<name>(species=...)` (see [Timestep](timestep.md)).
 
 ### Attributes
 
@@ -104,20 +78,8 @@ print(phase.data.shape) # e.g., (128, 128)
 
 ## Raw
 
-Represents raw particle data.
-
-### Class Definition
-
-```python
-class Raw(
-    file_path: str,
-    name: str,
-    timestep: int,
-    time: float,
-    lazy: bool,
-    species: int
-)
-```
+Represents raw particle data. Obtained via
+`dpy.timestep(ts).raw_files.raw(species=...)` (see [Timestep](timestep.md)).
 
 ### Attributes
 
@@ -144,9 +106,10 @@ raw = dpy.timestep(1).raw_files.raw(species=1)
 data_dict = raw.dict
 print(data_dict.keys())  # e.g., ['x1', 'x2', 'x3', 'p1', 'p2', 'p3']
 
-# Access specific quantities
+# Access specific quantities. In dHybridR, p1/p2/p3 are proper velocity
+# components (gamma*v), not 3-velocity or momentum.
 x_positions = data_dict['x1']
-momenta = data_dict['p1']
+proper_velocity_x = data_dict['p1']
 ```
 
 ---

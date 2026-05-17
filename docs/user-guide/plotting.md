@@ -97,22 +97,6 @@ Bx.plot(
 )
 ```
 
-### Available Colormaps
-
-Any matplotlib colormap can be used:
-
-```python
-# Sequential
-Bx.plot(colormap="viridis")
-Bx.plot(colormap="plasma")
-Bx.plot(colormap="inferno")
-
-# Diverging (good for fields with positive/negative values)
-Bx.plot(colormap="RdBu")
-Bx.plot(colormap="coolwarm")
-Bx.plot(colormap="seismic")
-```
-
 ## Subplots
 
 Combine multiple plots in a figure:
@@ -183,14 +167,3 @@ Bx.plot()
 plt.savefig("Bx_plot.png", dpi=300, bbox_inches="tight")
 ```
 
-## Plot Return Values
-
-The `plot()` method returns the axes and plot object for further customization:
-
-```python
-ax, mesh = Bx.plot()
-
-# Further customize
-mesh.set_clim(-1, 1)  # Set color limits
-ax.set_aspect('equal')  # Set aspect ratio
-```
