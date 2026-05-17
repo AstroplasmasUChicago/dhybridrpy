@@ -33,7 +33,6 @@ class Track:
         self.species = species
         self.lazy = lazy
         self._group_name = group_name
-        self._data_cache: Dict[str, np.ndarray] = {}
         self._available_keys: Optional[List[str]] = None
 
     def _get_available_keys(self) -> List[str]:
@@ -44,31 +43,30 @@ class Track:
         return self._available_keys
 
     def _load_dataset(self, key: str) -> Union[np.ndarray, da.Array]:
-        """Load a dataset from the track file."""
-        if key not in self._data_cache:
-            if key not in self._get_available_keys():
-                raise AttributeError(
-                    f"Dataset '{key}' not available for track {self.track_id}. "
-                )
+        """Load a dataset from the track file.
 
-            if self.lazy:
+        Always re-reads from HDF5 (or returns a fresh dask-delayed view) so
+        that iterating over many Tracks does not accumulate every dataset in
+        memory. Mirrors Data.data and Raw.dict.
+        """
+        if key not in self._get_available_keys():
+            raise AttributeError(
+                f"Dataset '{key}' not available for track {self.track_id}."
+            )
+
+        if self.lazy:
+            with h5py.File(self.file_path, "r") as f:
+                shape = f[self._group_name][key].shape
+                dtype = f[self._group_name][key].dtype
+
+            def loader(k=key):
                 with h5py.File(self.file_path, "r") as f:
-                    shape = f[self._group_name][key].shape
-                    dtype = f[self._group_name][key].dtype
+                    return f[self._group_name][k][:]
 
-                def loader(k=key):
-                    with h5py.File(self.file_path, "r") as f:
-                        return f[self._group_name][k][:]
+            return da.from_delayed(delayed(loader)(), shape=shape, dtype=dtype)
 
-                delayed_obj = delayed(loader)()
-                self._data_cache[key] = da.from_delayed(
-                    delayed_obj, shape=shape, dtype=dtype
-                )
-            else:
-                with h5py.File(self.file_path, "r") as f:
-                    self._data_cache[key] = f[self._group_name][key][:]
-
-        return self._data_cache[key]
+        with h5py.File(self.file_path, "r") as f:
+            return f[self._group_name][key][:]
 
     @property
     def x1(self) -> Union[np.ndarray, da.Array]:
