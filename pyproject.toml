@@ -15,12 +15,6 @@ dependencies = [
     "joblib>=1.4.2",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "ruff",
-    "pre-commit",
-]
-
 [project.urls]
 Homepage = "https://github.com/AstroplasmasUChicago/dhybridrpy"
 
