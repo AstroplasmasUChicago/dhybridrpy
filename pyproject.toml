@@ -3,7 +3,7 @@ name = "dhybridrpy"
 version = "v1.12"
 description = "A Python package to easily read input + output data from dHybridR."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = "AGPL-3.0-only"
 license-files = ["LICENSE"]
 dependencies = [
