@@ -60,7 +60,7 @@ Fields represent electromagnetic quantities on the simulation grid.
 | Magnetic (B) | `Bx`, `By`, `Bz`, `Bmagnitude` | Magnetic field |
 | Electric (E) | `Ex`, `Ey`, `Ez`, `Emagnitude` | Electric field |
 | Current (J) | `Jx`, `Jy`, `Jz`, `Jmagnitude` | Current density |
-| Gravity (G) | `Gx`, `Gy`, `Gz`, `Gmagnitude` | External force field |
+| External acceleration (Accel) | `Accelx`, `Accely`, `Accelz`, `Accelmagnitude` | External force/driving acceleration field (only available with `type="External"`) |
 
 ### Accessing Fields
 
@@ -89,6 +89,17 @@ Bx_total = dpy.timestep(1).fields.Bx(type="Total")
 Bx_ext = dpy.timestep(1).fields.Bx(type="External")
 Bx_self = dpy.timestep(1).fields.Bx(type="Self")
 ```
+
+!!! note
+    The external acceleration field (`Accel`) is only ever written as an
+    **External** field, so it must be requested with `type="External"`:
+
+    ```python
+    Accelx = dpy.timestep(1).fields.Accelx(type="External")
+    ```
+
+    Requesting it without `type="External"` (the default is `Total`) raises an
+    error, since no `Total` or `Self` acceleration field exists.
 
 ## Phase Data
 

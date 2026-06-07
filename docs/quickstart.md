@@ -62,7 +62,7 @@ print(ts.raw_files)  # Available raw files
 
 ## Accessing Fields
 
-Fields include magnetic field (B), electric field (E), and current density (J):
+Fields include magnetic field (B), electric field (E), current density (J), and, when external forcing is enabled in the simulation, the external acceleration field (Accel):
 
 ```python
 # Get the x-component of the magnetic field
@@ -87,6 +87,10 @@ Bx_ext = dpy.timestep(1).fields.Bx(type="External")
 
 # Get self-consistent magnetic field
 Bx_self = dpy.timestep(1).fields.Bx(type="Self")
+
+# The external acceleration field is only written as an External field,
+# so it must be requested with type="External"
+Accelx = dpy.timestep(1).fields.Accelx(type="External")
 ```
 
 ## Accessing Phases

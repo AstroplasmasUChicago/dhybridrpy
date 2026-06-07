@@ -28,6 +28,9 @@ Bz = ts.fields.Bz()
 Ex = ts.fields.Ex()
 Jx = ts.fields.Jx()
 
+# External acceleration field (only written as type="External")
+Accelx = ts.fields.Accelx(type="External")
+
 # Access magnitude
 Bmagnitude = ts.fields.Bmagnitude()
 ```
@@ -125,7 +128,7 @@ print(ts.fields)
 # Output:
 # Fields at timestep 1:
 #   type = Total: Bx, By, Bz, Bmagnitude, Ex, Ey, Ez, ...
-#   type = External: Bx, By, Bz, ...
+#   type = External: Bx, By, Bz, Accelx, Accely, Accelz, Accelmagnitude, ...
 #   type = Self: Bx, By, Bz, ...
 
 # View all available phases

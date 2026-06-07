@@ -86,7 +86,7 @@ class DHybridrpy:
         "Magnetic": "B",
         "Electric": "E",
         "CurrentDens": "J",
-        "Gravity": "G",
+        "ExtAccel": "Accel",
     }
     _PHASE_MAPPING = {"FluidVel": "V", "PressureTen": "P"}
     _COMPONENT_MAPPING = {"Intensity": "magnitude"}
