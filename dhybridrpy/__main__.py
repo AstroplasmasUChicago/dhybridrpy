@@ -2,7 +2,7 @@ import os
 import re
 import sys
 import subprocess
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import matplotlib
 
@@ -80,6 +80,53 @@ def downsample(data, xdata, ydata):
     if step > 1:
         return data[::step, ::step], xdata[::step], ydata[::step]
     return data, xdata, ydata
+
+
+_B_AXES = ("x", "y", "z")
+_B_DERIVED_NAMES = ("bparallel", "bperp")
+
+
+def _copy_named(data_obj, new_name: str):
+    """Return an independent copy of data_obj under a new display name.
+
+    Container lookups (e.g. ts.fields.Bx(...)) return the same cached Field
+    instance on every call, so renaming it in place would leak into any
+    later, unrelated --fields lookup of that same raw component. Copying
+    first keeps the rename local to this derived quantity.
+    """
+    old_name = data_obj.name
+    inst = data_obj.__class__(
+        data_obj.file_path,
+        new_name,
+        data_obj.timestep,
+        data_obj.time,
+        data_obj._time_ndecimals,
+        data_obj.lazy,
+        *data_obj._extra_init_args(),
+    )
+    inst._data_dict = dict(data_obj._data_dict)
+    array = inst._data_dict.pop(old_name, None)
+    if array is None:
+        array = data_obj.data
+    inst._data_dict[new_name] = array
+    inst._data_shape = tuple(array.shape)
+    inst._data_dtype = getattr(array, "dtype", None)
+    inst._plot_title = data_obj._plot_title.replace(old_name, new_name, 1)
+    return inst
+
+
+def _get_b_parallel_perp(ts, field_type: str, parallel_axis: str, want: str):
+    """Compute Bparallel (component along parallel_axis) or Bperp (quadrature
+    sum of the other two components) for the given field type."""
+    perp_axes = [a for a in _B_AXES if a != parallel_axis]
+
+    if want == "bparallel":
+        component = getattr(ts.fields, f"B{parallel_axis}")(type=field_type)
+        return _copy_named(component, "Bparallel")
+
+    b1 = getattr(ts.fields, f"B{perp_axes[0]}")(type=field_type)
+    b2 = getattr(ts.fields, f"B{perp_axes[1]}")(type=field_type)
+    return _copy_named(np.sqrt(b1**2 + b2**2), "Bperp")
 
 
 def vecho(msg: str) -> None:
@@ -355,7 +402,7 @@ def plot_data_series(
     if video and saved_count > 0:
         make_video(plot_dir, label, fps)
     elif video:
-        typer.echo(f"  Skipping video: no frames saved", err=True)
+        typer.echo("  Skipping video: no frames saved", err=True)
 
 
 @app.command()
@@ -413,6 +460,25 @@ def run(
     plots_dir: str = typer.Option(
         "plots", "--plots-dir", help="Base output directory for plots."
     ),
+    x_range: Optional[Tuple[float, float]] = typer.Option(
+        None,
+        "--x-range",
+        help="Keep only this fraction of the box along x, e.g. --x-range 0.05 0.95 "
+        "(default: full box). Applied before color-scale sampling and rendering, "
+        "so it also excludes edge cells from vmin/vmax percentiles.",
+    ),
+    y_range: Optional[Tuple[float, float]] = typer.Option(
+        None,
+        "--y-range",
+        help="Keep only this fraction of the box along y, e.g. --y-range 0.05 0.95 "
+        "(default: full box).",
+    ),
+    parallel_axis: str = typer.Option(
+        "x",
+        "--parallel-axis",
+        help="Axis (x, y, or z) treated as parallel for --fields Bparallel/Bperp; "
+        "Bperp is the quadrature sum of the other two components.",
+    ),
 ) -> None:
     """
     dplot: Visualize dHybridR simulation fields and phases.
@@ -433,6 +499,26 @@ def run(
 
     global _VERBOSE
     _VERBOSE = verbose
+
+    parallel_axis = parallel_axis.lower()
+    if parallel_axis not in _B_AXES:
+        typer.echo(
+            f"Error: --parallel-axis must be one of x, y, z (got '{parallel_axis}').",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    for opt_name, opt_value in (("--x-range", x_range), ("--y-range", y_range)):
+        if opt_value is None:
+            continue
+        lo, hi = opt_value
+        if not (0.0 <= lo < hi <= 1.0):
+            typer.echo(
+                f"Error: {opt_name} must satisfy 0 <= low < high <= 1 "
+                f"(got {opt_value}).",
+                err=True,
+            )
+            raise typer.Exit(1)
 
     try:
         dpy = DHybridrpy(input, output, exclude_timestep_zero=True)
@@ -466,16 +552,32 @@ def run(
     # Plot fields
     if fields:
         for field_name in fields:
-            typer.echo(f"Field: {field_name} (type={field_type})")
-            plot_dir = os.path.join(plots_dir, "Fields", field_name)
+            canonical = field_name.lower()
+            is_b_derived = canonical in _B_DERIVED_NAMES
+            if canonical == "bparallel":
+                display_name = "Bparallel"
+            elif canonical == "bperp":
+                display_name = "Bperp"
+            else:
+                display_name = field_name
 
-            def get_field(ts, _name=field_name, _type=field_type):
-                return getattr(ts.fields, _name)(type=_type)
+            axis_note = f", parallel_axis={parallel_axis}" if is_b_derived else ""
+            typer.echo(f"Field: {display_name} (type={field_type}){axis_note}")
+            plot_dir = os.path.join(plots_dir, "Fields", display_name)
+
+            def get_field(ts, _name=field_name, _type=field_type, _canonical=canonical):
+                if _canonical in _B_DERIVED_NAMES:
+                    obj = _get_b_parallel_perp(ts, _type, parallel_axis, _canonical)
+                else:
+                    obj = getattr(ts.fields, _name)(type=_type)
+                if x_range is not None or y_range is not None:
+                    obj = obj.crop(x_range=x_range, y_range=y_range)
+                return obj
 
             plot_data_series(
                 dpy,
                 get_field,
-                field_name,
+                display_name,
                 plot_dir,
                 colormap,
                 dpi,
@@ -502,7 +604,10 @@ def run(
                 plot_dir = os.path.join(plots_dir, "Phases", label)
 
                 def get_phase(ts, _name=phase_name, _sp=sp):
-                    return getattr(ts.phases, _name)(species=_sp)
+                    obj = getattr(ts.phases, _name)(species=_sp)
+                    if x_range is not None or y_range is not None:
+                        obj = obj.crop(x_range=x_range, y_range=y_range)
+                    return obj
 
                 plot_data_series(
                     dpy,

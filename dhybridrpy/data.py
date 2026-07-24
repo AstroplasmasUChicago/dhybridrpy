@@ -232,11 +232,11 @@ def fft_power_1d_slices(
 
     count = positive.sum(axis=0)
     sum_log = log_power.sum(axis=0)
-    sum_log_sq = (log_power ** 2).sum(axis=0)
+    sum_log_sq = (log_power**2).sum(axis=0)
 
     safe_count = np.where(count > 0, count, 1)
     log_mean = sum_log / safe_count
-    log_var = sum_log_sq / safe_count - log_mean ** 2
+    log_var = sum_log_sq / safe_count - log_mean**2
     log_std = np.sqrt(np.maximum(log_var, 0.0))
 
     power_mean = np.where(count > 0, np.exp(log_mean), 0.0)
@@ -368,9 +368,7 @@ class Data(BaseProperties):
                 return np.asarray(ds[:, idx, :]).T  # -> (nx, nz)
             return np.asarray(ds[idx, :, :]).T  # -> (nx, ny)
 
-    def _materialize(
-        self, arr: Union[np.ndarray, da.Array]
-    ) -> np.ndarray:
+    def _materialize(self, arr: Union[np.ndarray, da.Array]) -> np.ndarray:
         """Return a numpy array for `arr`, calling .compute() if it's a dask array.
 
         Callers should bind `self.data` (or another property) once, then pass it
@@ -541,9 +539,7 @@ class Data(BaseProperties):
         # Only carry over cached AXIS coords/lims if shape didn't change;
         # otherwise the cached arrays would be the wrong length.
         if tuple(result_array.shape) == self._get_data_shape():
-            inst._data_dict = {
-                k: v for k, v in self._data_dict.items() if "AXIS" in k
-            }
+            inst._data_dict = {k: v for k, v in self._data_dict.items() if "AXIS" in k}
         else:
             inst._data_dict = {}
         inst._data_dict[new_name] = result_array
@@ -581,14 +577,16 @@ class Data(BaseProperties):
 
     def __rsub__(self, other):
         return self._create_new_instance(
-            other - self.data, "",
+            other - self.data,
+            "",
             f"{self._short_operand_name(other)}-{self.name}",
             self,
         )
 
     def __rtruediv__(self, other):
         return self._create_new_instance(
-            other / self.data, "",
+            other / self.data,
+            "",
             f"{self._short_operand_name(other)}/{self.name}",
             self,
         )
@@ -712,6 +710,75 @@ class Data(BaseProperties):
             raise NotImplementedError("avg_1d only supports 1D, 2D, or 3D data.")
 
         return coord_data, mean_data, mean_data - std_data, mean_data + std_data
+
+    def crop(
+        self,
+        x_range: Optional[Tuple[float, float]] = None,
+        y_range: Optional[Tuple[float, float]] = None,
+        z_range: Optional[Tuple[float, float]] = None,
+    ) -> "Data":
+        """
+        Return a new instance restricted to a fractional sub-region of the box.
+
+        Each `*_range` is a (low, high) pair of fractions in [0, 1] along that
+        axis (0 = start of box, 1 = end of box); axes left as None are kept
+        whole. Useful for excluding domain-edge artifacts (e.g. absorbing
+        boundaries) from color scales and other statistics computed downstream.
+
+        Args:
+            x_range: (low, high) fraction of the box to keep along x.
+            y_range: (low, high) fraction of the box to keep along y.
+            z_range: (low, high) fraction of the box to keep along z.
+
+        Returns:
+            A new instance of the same class holding only the cropped region,
+            with axis coordinates and limits adjusted to match.
+        """
+        shape = self._get_data_shape()
+        axis_names = ("X1 AXIS", "X2 AXIS", "X3 AXIS")[: len(shape)]
+        fractions = (x_range, y_range, z_range)[: len(shape)]
+
+        index_slices = []
+        axis_overrides = {}
+        for axis_name, size, frac_range in zip(axis_names, shape, fractions):
+            if frac_range is None:
+                index_slices.append(slice(None))
+                continue
+
+            lo_frac, hi_frac = frac_range
+            if not (0.0 <= lo_frac < hi_frac <= 1.0):
+                raise ValueError(
+                    f"Invalid crop range {frac_range} for {axis_name}; "
+                    "expected 0 <= low < high <= 1."
+                )
+            i0 = int(round(lo_frac * size))
+            i1 = max(int(round(hi_frac * size)), i0 + 1)
+            index_slices.append(slice(i0, i1))
+
+            limits = self._materialize(self._get_coordinate_limits(axis_name))
+            delta = (limits[1] - limits[0]) / size
+            axis_overrides[f"{axis_name} lims"] = np.array(
+                [limits[0] + delta * i0, limits[0] + delta * i1]
+            )
+            coords = self._compute_coordinates(axis_name, size)
+            axis_overrides[f"{axis_name} coords"] = coords[i0:i1]
+
+        inst = self.__class__(
+            self.file_path,
+            self.name,
+            self.timestep,
+            self.time,
+            self._time_ndecimals,
+            self.lazy,
+            *self._extra_init_args(),
+        )
+        inst._data_dict = axis_overrides
+        cropped = self.data[tuple(index_slices)]
+        inst._data_dict[self.name] = cropped
+        inst._data_shape = tuple(cropped.shape)
+        inst._data_dtype = getattr(cropped, "dtype", None)
+        inst._plot_title = self._plot_title
+        return inst
 
     def fft_power(
         self,
@@ -1113,8 +1180,12 @@ class Data(BaseProperties):
                 ax.set_ylim(ylim if ylim else ylimdata)
 
             mesh = ax.pcolormesh(
-                A, B, initial_data_slice,
-                cmap=colormap, shading="auto", **kwargs,
+                A,
+                B,
+                initial_data_slice,
+                cmap=colormap,
+                shading="auto",
+                **kwargs,
             )
 
             ax.set_title(

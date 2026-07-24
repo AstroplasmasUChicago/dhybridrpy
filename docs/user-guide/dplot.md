@@ -63,6 +63,20 @@ dplot -i path/to/input --all-fields
 dplot -i path/to/input --all-fields --type Self
 ```
 
+## Bparallel and Bperp
+
+In addition to the raw components (`Bx`, `By`, `Bz`), `--fields` accepts two derived magnetic-field quantities: `Bparallel` (the component along a chosen axis) and `Bperp` (the quadrature sum of the other two components). Use `--parallel-axis` to choose which axis is "parallel" (default: `x`); `Bperp` is derived automatically from whichever two axes remain:
+
+```bash
+# Parallel/perp relative to a guide field along x (the default)
+dplot -i path/to/input --fields Bparallel --fields Bperp
+
+# Guide field along z instead
+dplot -i path/to/input --fields Bparallel --fields Bperp --parallel-axis z
+```
+
+`--type` still applies, so `--fields Bparallel --type Self` decomposes the self-generated field instead of `Total`.
+
 ## Plotting Phases
 
 Use `--phases` to plot phase-space distributions. Use `--species` to select which species to include:
@@ -88,6 +102,17 @@ Use `--all-phases` to plot every available phase-space distribution:
 dplot -i path/to/input --all-phases
 dplot -i path/to/input --all-phases --species 1
 ```
+
+## Cropping the Box
+
+Use `--x-range` and `--y-range` to keep only a fractional sub-region of the simulation box (each takes a `low high` pair between 0 and 1). This is useful for excluding domain-edge artifacts, such as absorbing boundaries, that would otherwise skew the color scale or dominate the plot:
+
+```bash
+# Drop the outer 10% on each side of both axes
+dplot -i path/to/input --fields Bx --x-range 0.1 0.9 --y-range 0.1 0.9
+```
+
+The crop is applied before the color-scale percentile scan and before rendering, so excluded cells never influence `vmin`/`vmax` either. It works for both `--fields` and `--phases` (including `Bparallel`/`Bperp`), though for phase-space plots the second axis is often momentum rather than physical `y` — check the axis labels in the output before relying on `--y-range` there.
 
 ## Creating Videos
 
@@ -205,6 +230,9 @@ dplot -i path/to/input --all-fields -j 4 -v
 | `--pmin` | | `2.0` | Lower percentile used to estimate `vmin` during the initial scan. |
 | `--pmax` | | `98.0` | Upper percentile used to estimate `vmax` during the initial scan. |
 | `--plots-dir` | | `plots` | Base output directory for saved plots. |
+| `--x-range` | | full box | Keep only this `low high` fraction (0-1) of the box along x. |
+| `--y-range` | | full box | Keep only this `low high` fraction (0-1) of the box along y. |
+| `--parallel-axis` | | `x` | Axis (`x`, `y`, or `z`) treated as parallel for `--fields Bparallel`/`Bperp`. |
 
 ## Examples
 
