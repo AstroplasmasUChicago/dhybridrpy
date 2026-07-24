@@ -361,7 +361,7 @@ wheels = [
 
 [[package]]
 name = "dhybridrpy"
-version = "1.8"
+version = "1.10"
 source = { editable = "." }
 dependencies = [
     { name = "dask", version = "2023.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },

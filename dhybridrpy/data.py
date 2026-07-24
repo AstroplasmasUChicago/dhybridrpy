@@ -20,6 +20,7 @@ def fft_power_iso(
     Lx: float,
     Ly: Optional[float] = None,
     Lz: Optional[float] = None,
+    normalize: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Compute isotropic FFT power spectrum of a numpy array.
@@ -29,6 +30,9 @@ def fft_power_iso(
         Lx: Box size in x direction
         Ly: Box size in y direction (required for 2D/3D)
         Lz: Box size in z direction (required for 3D)
+        normalize: if True, divide each radial |k| shell by its mode count, giving
+            the per-mode (azimuthally averaged) power instead of the summed shell
+            energy (default False).
 
     Returns:
         Tuple of (k, power) where:
@@ -56,6 +60,11 @@ def fft_power_iso(
 
         # Bin the spectrum
         binned_power, _ = np.histogram(np.abs(k), bins=k_bins, weights=power)
+        if normalize:  # per-mode average: divide by the mode count in each bin
+            counts, _ = np.histogram(np.abs(k), bins=k_bins)
+            binned_power = np.divide(
+                binned_power, counts, out=np.zeros_like(binned_power), where=counts > 0
+            )
 
         return k_centers, binned_power
 
@@ -92,6 +101,11 @@ def fft_power_iso(
         radial_sum, _ = np.histogram(K_flat, bins=k_bins, weights=P_flat)
 
         power_radial = radial_sum
+        if normalize:  # per-mode (azimuthal) average: divide by shell mode count
+            counts, _ = np.histogram(K_flat, bins=k_bins)
+            power_radial = np.divide(
+                radial_sum, counts, out=np.zeros_like(radial_sum), where=counts > 0
+            )
 
         return k_centers, power_radial
 
@@ -132,6 +146,11 @@ def fft_power_iso(
         radial_sum, _ = np.histogram(K_flat, bins=k_bins, weights=P_flat)
 
         power_radial = radial_sum
+        if normalize:  # per-mode (azimuthal) average: divide by shell mode count
+            counts, _ = np.histogram(K_flat, bins=k_bins)
+            power_radial = np.divide(
+                radial_sum, counts, out=np.zeros_like(radial_sum), where=counts > 0
+            )
 
         return k_centers, power_radial
 
