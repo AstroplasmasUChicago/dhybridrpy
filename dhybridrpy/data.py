@@ -624,6 +624,20 @@ class Data(BaseProperties):
             return arr.compute()
         return arr
 
+    def _parallel_read_worthwhile(self) -> bool:
+        """Whether to read this dataset with worker processes: it must be
+        large enough to benefit and spawning workers must be safe here."""
+        from . import _parallel
+
+        nbytes = (
+            int(np.prod(self._get_data_shape()))
+            * np.dtype(self._get_data_dtype()).itemsize
+        )
+        return (
+            nbytes >= _parallel.SINGLE_FILE_MIN_BYTES
+            and _parallel.spawn_is_safe()
+        )
+
     def _get_data_shape(self) -> Tuple[int, ...]:
         """Retrieve the shape of the data without loading it."""
         if self._data_shape is None:
@@ -657,6 +671,16 @@ class Data(BaseProperties):
                 shape=self._get_data_shape(),
                 dtype=self._get_data_dtype(),
             )
+        elif self._parallel_read_worthwhile():
+            from . import _parallel
+
+            try:
+                arr = _parallel.parallel_read_data(self.file_path)
+            except Exception:
+                arr = None
+            if arr is not None:
+                return arr.T
+            return loader()
         else:
             return loader()
 

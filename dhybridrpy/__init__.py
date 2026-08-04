@@ -11,6 +11,7 @@ _EXPORTS = {
     "Phase": ".data",
     "Raw": ".data",
     "close_pooled_handles": ".data",
+    "close_worker_pool": "._parallel",
     "fft_power_iso": ".data",
     "fft_power_1d_slices": ".data",
     "Track": ".tracks",
@@ -29,6 +30,7 @@ if TYPE_CHECKING:
         fft_power_iso as fft_power_iso,
         fft_power_1d_slices as fft_power_1d_slices,
     )
+    from ._parallel import close_worker_pool as close_worker_pool
     from .dhybridrpy import DHybridrpy as DHybridrpy
     from .tracks import Track as Track, TrackCollection as TrackCollection
 

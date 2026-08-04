@@ -144,6 +144,113 @@ def test_pool_is_persistent_and_closable(field_tree):
     assert _parallel._pool is None
 
 
+def write_cube_file(fp, shape, chunks, shuffle=True, sparse=False):
+    rng = np.random.default_rng(11)
+    data = rng.standard_normal(shape).astype(np.float32)
+    with h5py.File(fp, "w") as f:
+        ax = f.create_group("AXIS")
+        for i in range(len(shape)):
+            ax.create_dataset(
+                f"X{i+1} AXIS", data=np.array([0.0, 10.0], dtype=np.float32)
+            )
+        if sparse:
+            ds = f.create_dataset("DATA", shape=shape, dtype=np.float32,
+                                  chunks=chunks, shuffle=shuffle,
+                                  compression="gzip", compression_opts=1)
+            sel = tuple(slice(0, s // 2) for s in shape)
+            ds[sel] = data[sel]
+            expected = np.zeros(shape, dtype=np.float32)
+            expected[sel] = data[sel]
+            return expected
+        f.create_dataset("DATA", data=data, chunks=chunks, shuffle=shuffle,
+                         compression="gzip", compression_opts=1)
+    return data
+
+
+@pytest.mark.parametrize("shape,chunks", [
+    ((50, 36, 44), (24, 16, 32)),   # chunk-unaligned edges
+    ((40, 120), (5, 32)),
+    ((64, 64, 64), (64, 64, 8)),    # split axis is not axis 0
+])
+def test_parallel_read_data_bit_identical(tmp_path, monkeypatch, shape, chunks):
+    monkeypatch.setattr(_parallel, "SINGLE_FILE_MIN_BYTES", 1)
+    fp = str(tmp_path / "cube.h5")
+    data = write_cube_file(fp, shape, chunks)
+    with h5py.File(fp, "r") as f:
+        serial = f["DATA"][:]
+    result = _parallel.parallel_read_data(fp, workers=3)
+    assert result.tobytes() == serial.tobytes()  # bytewise, not just value-wise
+    np.testing.assert_array_equal(result, data)
+
+
+def test_parallel_read_data_sparse_chunks(tmp_path, monkeypatch):
+    monkeypatch.setattr(_parallel, "SINGLE_FILE_MIN_BYTES", 1)
+    fp = str(tmp_path / "sparse.h5")
+    expected = write_cube_file(fp, (48, 40, 40), (16, 16, 16), sparse=True)
+    result = _parallel.parallel_read_data(fp, workers=3)
+    np.testing.assert_array_equal(result, expected)
+
+
+def test_parallel_read_data_declines_small_files(tmp_path):
+    fp = str(tmp_path / "small.h5")
+    write_cube_file(fp, (8, 8, 8), (4, 4, 4))
+    assert _parallel.parallel_read_data(fp) is None
+
+
+def test_spawn_is_unsafe_under_pytest():
+    # pytest's __main__ has a file, so the transparent path must stay off
+    assert not _parallel.spawn_is_safe()
+
+
+def _worker_flag():
+    return _parallel._in_worker
+
+
+def test_workers_cannot_nest_pools(monkeypatch):
+    pool = _parallel.get_pool(2)
+    assert pool.submit(_worker_flag).result() is True  # set in workers
+    assert _parallel._in_worker is False  # not in the parent
+
+    monkeypatch.setattr(_parallel, "_in_worker", True)
+    assert not _parallel.spawn_is_safe()
+    with pytest.raises(RuntimeError, match="inside a worker"):
+        _parallel.get_pool(2)
+
+
+def test_data_property_parallel_when_safe(field_tree, monkeypatch):
+    inp, out, expected = field_tree
+    dp = DHybridrpy(inp, out)
+    field = dp.timestep(10).fields.Bx("Total")
+
+    monkeypatch.setattr(_parallel, "SINGLE_FILE_MIN_BYTES", 1)
+    monkeypatch.setattr(_parallel, "spawn_is_safe", lambda: True)
+    calls = {"n": 0}
+    real_read = _parallel.parallel_read_data
+
+    def counting_read(path, workers=None):
+        calls["n"] += 1
+        return real_read(path, workers)
+
+    monkeypatch.setattr(_parallel, "parallel_read_data", counting_read)
+    np.testing.assert_array_equal(field.data, expected[10].T)
+    assert calls["n"] == 1
+
+
+def test_data_property_serial_when_unsafe(field_tree, monkeypatch):
+    inp, out, expected = field_tree
+    dp = DHybridrpy(inp, out)
+    field = dp.timestep(10).fields.Bx("Total")
+
+    monkeypatch.setattr(_parallel, "SINGLE_FILE_MIN_BYTES", 1)
+    calls = {"n": 0}
+    monkeypatch.setattr(
+        _parallel, "parallel_read_data",
+        lambda *a, **k: calls.__setitem__("n", calls["n"] + 1),
+    )
+    np.testing.assert_array_equal(field.data, expected[10].T)
+    assert calls["n"] == 0  # spawn_is_safe is False under pytest
+
+
 @pytest.fixture
 def raw_file(tmp_path):
     fp = tmp_path / "raw_sp01_00000010.h5"
