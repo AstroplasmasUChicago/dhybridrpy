@@ -109,8 +109,8 @@ raw = dpy.timestep(1).raw_files.raw(species=1)
 
 print(raw.keys())  # e.g., ['x1', 'x2', 'x3', 'p1', 'p2', 'p3']
 
-# One dataset without reading the rest. In dHybridR, p1/p2/p3 are proper
-# velocity components (gamma*v), not 3-velocity or momentum.
+# One dataset without reading the rest. Despite the p names, p1/p2/p3
+# hold regular velocities in units of the Alfven speed.
 energies = raw["ene"]
 
 # Several datasets, read by parallel worker processes
@@ -166,6 +166,27 @@ Bz = dpy.timestep(1).fields.Bz()
 
 B_magnitude = np.sqrt(Bx**2 + By**2 + Bz**2)
 ```
+
+### Comparisons
+
+Comparisons are elementwise, like every other operator, and return a
+boolean data object:
+
+```python
+mask = density > 1.0          # boolean data object
+frac = np.mean(mask.data)     # fraction of cells above the threshold
+```
+
+Two consequences match NumPy array behavior:
+
+- `if a == b:` raises `ValueError`, because the truth value of a whole
+  array is ambiguous. Ask `np.all(np.equal(a, b).data)` for "all values
+  equal", or `a is b` for "the same object".
+- Data objects cannot be dictionary keys or set members.
+
+One deliberately differs: comparing against `None` returns plain
+`False` instead of an elementwise array, so `field == None` behaves
+like an identity check.
 
 ### Compatibility Requirements
 

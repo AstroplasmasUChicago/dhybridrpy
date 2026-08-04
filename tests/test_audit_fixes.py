@@ -81,7 +81,7 @@ def test_avg_1d_direction_guard_and_bool(small_field, tmp_path):
     with pytest.raises(ValueError, match="1D data"):
         line.avg_1d("y")
     # a comparison result averages as floats instead of crashing
-    mask = np.greater(field, 0.0)
+    mask = field > 0.0
     coords, mean, lo, hi = mask.avg_1d("x")
     np.testing.assert_allclose(mean, (values.T > 0).mean(axis=1))
 
@@ -158,3 +158,43 @@ def test_timestep_closest_huge_argument(tmp_path):
     write_field(bx, "Bfld", 10, np.zeros((4, 8)), 5.0)
     dp = DHybridrpy(str(tmp_path / "input"), str(tmp_path / "Output"))
     assert dp.timestep_closest(10**25).timestep == 10
+
+
+def test_comparisons_are_elementwise(small_field):
+    field, values = small_field
+    same = field * 1.0
+    equal = field == same
+    assert equal.data.dtype == np.bool_
+    assert equal.data.all()
+
+    threshold = field > 0.0
+    np.testing.assert_array_equal(threshold.data, values.T > 0)
+
+    unequal = field != same
+    assert not unequal.data.any()
+
+    # ndarray on either side gives the same elementwise result
+    left = field == values.T
+    right = values.T == field
+    np.testing.assert_array_equal(left.data, right.data)
+
+
+def test_comparison_ambiguity_and_identity(small_field):
+    field, _ = small_field
+    assert field is field
+    assert (field == None) is False  # noqa: E711  falls back to identity
+    with pytest.raises(ValueError, match="ambiguous"):
+        if field == field * 1.0:
+            pass
+    with pytest.raises(TypeError):
+        {field}  # unhashable, like numpy arrays
+
+
+def test_comparison_incompatible_shapes_raise(small_field, tmp_path):
+    field, _ = small_field
+    other_fp = write_field(tmp_path / "other", "Bfld", 10,
+                           np.zeros((3, 5), dtype=np.float32), 5.0)
+    other = Field(str(other_fp), "Bx", 10, 5.0, 6, lazy=False,
+                  field_type="Total")
+    with pytest.raises(ValueError, match="Incompatible grid shapes"):
+        field == other

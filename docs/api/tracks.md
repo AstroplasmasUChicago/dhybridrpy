@@ -42,17 +42,20 @@ The datasets below are the ones dHybridR typically writes. The suffixes
 | `x2` | Y coordinate over time |
 | `x3` | Z coordinate over time |
 
-#### Proper Velocity
+#### Velocity
 
-dHybridR track files store proper velocity (gamma times velocity) as
-`p1`, `p2`, `p3`. There are no `v1`, `v2`, `v3` datasets unless the run
-wrote them.
+Velocities are stored in units of the Alfven speed. Current dHybridR
+names these datasets `v1`, `v2`, `v3`; older track files name the same
+quantities `p1`, `p2`, `p3`. Despite the p names, the values are
+regular velocities, not momenta or proper velocities. (Input-file
+quantities such as `uth` and `vdrift` are proper velocities, but they
+are converted at initialization.)
 
 | Dataset | Description |
 |---------|-------------|
-| `p1` | X proper velocity over time |
-| `p2` | Y proper velocity over time |
-| `p3` | Z proper velocity over time |
+| `v1` (or `p1`) | X velocity over time |
+| `v2` (or `p2`) | Y velocity over time |
+| `v3` (or `p3`) | Z velocity over time |
 
 #### Electromagnetic Fields
 
@@ -85,8 +88,8 @@ track = dpy.track('0-1465')
 # Get trajectory
 x, y = track.x1, track.x2
 
-# Get proper velocity components
-px, py, pz = track.p1, track.p2, track.p3
+# Get velocity components (p1/p2/p3 in older track files)
+vx, vy, vz = track.p1, track.p2, track.p3
 
 # Get fields at particle position over time
 Bx, By, Bz = track.B1, track.B2, track.B3

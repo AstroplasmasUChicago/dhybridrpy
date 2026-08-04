@@ -232,8 +232,8 @@ raw = dpy.timestep(1).raw_files.raw(species=1)
 data = raw.dict
 print("Available quantities:", list(data.keys()))
 
-# Get positions and proper velocity components. In dHybridR, p1/p2/p3 are
-# proper velocity (gamma*v), not 3-velocity or momentum.
+# Get positions and velocities. Despite the p names, p1/p2/p3 hold
+# regular velocities in units of the Alfven speed.
 x = data['x1']
 p = data['p1']
 

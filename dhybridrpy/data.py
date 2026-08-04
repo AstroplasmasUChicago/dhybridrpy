@@ -894,6 +894,38 @@ class Data(BaseProperties):
         )
 
     # Ensure that mixed Data and NumPy operations produce a Data object
+    # Comparisons are elementwise, like every other operator on Data.
+    # Use `a is b` to ask whether two names refer to the same object.
+    def __eq__(self, other):
+        if other is None:
+            return NotImplemented
+        return np.equal(self, other)
+
+    def __ne__(self, other):
+        if other is None:
+            return NotImplemented
+        return np.not_equal(self, other)
+
+    def __lt__(self, other):
+        return np.less(self, other)
+
+    def __le__(self, other):
+        return np.less_equal(self, other)
+
+    def __gt__(self, other):
+        return np.greater(self, other)
+
+    def __ge__(self, other):
+        return np.greater_equal(self, other)
+
+    # defining __eq__ removes hashability, matching numpy arrays
+
+    def __bool__(self):
+        raise ValueError(
+            "The truth value of a Data object is ambiguous. Use np.all or "
+            "np.any on the comparison, or `a is b` to test identity."
+        )
+
     __array_priority__ = 20
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
