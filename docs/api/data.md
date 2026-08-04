@@ -208,8 +208,9 @@ def plot(
     show_colorbar: bool = True,
     colorbar_label: Optional[str] = None,
     slice_axis: Literal["x", "y", "z"] = "x",
+    context_3d: bool = True,
     **kwargs
-) -> Tuple[Axes, Union[Line2D, QuadMesh]]
+) -> Tuple[Axes, Union[Line2D, QuadMesh, AxesImage]]
 ```
 
 ### Parameters
@@ -228,13 +229,14 @@ def plot(
 | `colormap` | `str` | `"viridis"` | Colormap name |
 | `show_colorbar` | `bool` | `True` | Show colorbar |
 | `colorbar_label` | `str` | `None` | Colorbar label |
-| `slice_axis` | `str` | `"x"` | Slice axis for 3D data |
+| `slice_axis` | `str` | `"x"` | Slice axis for 3D data; step slices with the left/right arrow keys |
+| `context_3d` | `bool` | `True` | For 3D data, add a rotatable cube of the volume's outer faces with a deep-red frame marking the current slice (ignored when `ax` is given) |
 | `**kwargs` | | | Additional matplotlib kwargs |
 
 ### Returns
 
-- `Axes`: The matplotlib Axes object
-- `Line2D` or `QuadMesh`: The plot object
+- `Axes`: The matplotlib Axes object (for 3D data, the slice panel)
+- `Line2D`, `QuadMesh`, or `AxesImage`: The plot object (3D slices are drawn with imshow)
 
 ### Example
 

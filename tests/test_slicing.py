@@ -118,6 +118,62 @@ def test_evicted_dataset_remains_usable(tmp_path, monkeypatch):
     np.testing.assert_array_equal(ds1[0, 0, :], cube1[0, 0, :])
 
 
+def test_plot3d_context_panels(tmp_path):
+    import matplotlib
+
+    matplotlib.use("Agg")
+    from matplotlib.image import AxesImage
+    from mpl_toolkits.mplot3d import Axes3D
+
+    fp = tmp_path / "Bfld_00000100.h5"
+    cube = write_cube(fp)
+    field = make_field(fp)
+    ax, img = field.plot(slice_axis="x")
+    fig = ax.figure
+    assert isinstance(img, AxesImage)
+    np.testing.assert_array_equal(np.asarray(img.get_array()), cube[:, :, 0])
+    # extent = (y limits, z limits) for an x slice; the cube spans the box
+    np.testing.assert_allclose(img.get_extent(), (0.0, 24.0, 0.0, 16.0))
+    ax3d = [a for a in fig.axes if isinstance(a, Axes3D)]
+    assert len(ax3d) == 1
+    # convex cube: exactly 3 of the 6 faces visible at the default view;
+    # 4 marker strips always visible
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
+    polys = [c for c in ax3d[0].collections if isinstance(c, Poly3DCollection)]
+    assert sum(p.get_visible() for p in polys) == 3 + 4
+
+    # stepping the slider moves the marker without leaking artists
+    slider = fig._dhybridrpy_widgets[-1]
+    n_artists = len(ax3d[0].collections)
+    for i in (3, 7, 11):
+        slider.set_val(i)
+        assert len(ax3d[0].collections) == n_artists
+    np.testing.assert_array_equal(np.asarray(img.get_array()), cube[:, :, 11])
+
+    import matplotlib.pyplot as plt
+
+    plt.close(fig)
+
+
+def test_plot3d_without_context(tmp_path):
+    import matplotlib
+
+    matplotlib.use("Agg")
+    from mpl_toolkits.mplot3d import Axes3D
+
+    fp = tmp_path / "Bfld_00000100.h5"
+    write_cube(fp)
+    field = make_field(fp)
+    ax, img = field.plot(slice_axis="y", context_3d=False)
+    fig = ax.figure
+    assert not any(isinstance(a, Axes3D) for a in fig.axes)
+
+    import matplotlib.pyplot as plt
+
+    plt.close(fig)
+
+
 def test_arrow_keys_step_slider(tmp_path):
     import matplotlib
 

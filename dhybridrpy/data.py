@@ -7,11 +7,14 @@ import numpy as np
 import dask.array as da
 import matplotlib.pyplot as plt
 import operator
+from matplotlib import colormaps
+from matplotlib import colors as mcolors
 from matplotlib.widgets import Slider
 
 from matplotlib.axes import Axes
 from matplotlib.backend_bases import key_press_handler
 from matplotlib.collections import QuadMesh
+from matplotlib.image import AxesImage
 from matplotlib.lines import Line2D
 from typing import Tuple, Union, Optional, Literal
 from dask.delayed import delayed
@@ -109,6 +112,127 @@ def _pooled_dataset(file_path: str) -> h5py.Dataset:
         while len(_slice_handles) > _SLICE_HANDLES_MAX:
             _slice_handles.pop(next(iter(_slice_handles)), None)
         return _slice_handles[key][1]
+
+
+def _add_slice_context(ax3d, source, slice_axis: str, colormap: str):
+    """Draw `source`'s volume on `ax3d` as its six outer faces and return
+    (draw_marker, cull_back_faces) closures for the moving slice frame.
+
+    The cube is convex, so only the faces whose outward normal points at
+    the camera are shown; with no overlapping geometry, matplotlib's
+    per-artist depth sort is unnecessary and the slice frame can sit on a
+    fixed high zorder, visible from every angle.
+    """
+    shape = source._get_data_shape()
+    coords = [
+        np.asarray(source._materialize(c))
+        for c in (source.xdata, source.ydata, source.zdata)
+    ]
+    axis_index = {"x": 0, "y": 1, "z": 2}[slice_axis]
+    plane_axes = [i for i in range(3) if i != axis_index]
+    along = coords[axis_index]
+    u, v = coords[plane_axes[0]], coords[plane_axes[1]]
+
+    def sampled_indices(n):
+        idx = np.arange(0, n, max(1, n // 24))
+        if idx[-1] != n - 1:
+            idx = np.append(idx, n - 1)  # include the far edge: faces must meet
+        return idx
+
+    sampled = [sampled_indices(n) for n in shape]
+    faces = {}
+    for face_axis in "xyz":
+        i_axis = {"x": 0, "y": 1, "z": 2}[face_axis]
+        others = [i for i in range(3) if i != i_axis]
+        picker = np.ix_(sampled[others[0]], sampled[others[1]])
+        faces[(face_axis, 0)] = source._read_2d_slice(face_axis, 0)[picker]
+        faces[(face_axis, -1)] = source._read_2d_slice(
+            face_axis, shape[i_axis] - 1
+        )[picker]
+
+    norm = mcolors.Normalize(
+        min(a.min() for a in faces.values()),
+        max(a.max() for a in faces.values()),
+    )
+    face_rgba = colormaps[colormap] if isinstance(colormap, str) else colormap
+    ax3d.computed_zorder = False
+    face_artists = {}
+    face_normals = {}
+    for (face_axis, end), face in faces.items():
+        i_axis = {"x": 0, "y": 1, "z": 2}[face_axis]
+        others = [i for i in range(3) if i != i_axis]
+        A, B = np.meshgrid(
+            coords[others[0]][sampled[others[0]]],
+            coords[others[1]][sampled[others[1]]],
+            indexing="ij",
+        )
+        xyz = [None, None, None]
+        xyz[i_axis] = np.full_like(A, coords[i_axis][end])
+        xyz[others[0]], xyz[others[1]] = A, B
+        face_artists[(face_axis, end)] = ax3d.plot_surface(
+            *xyz, facecolors=face_rgba(norm(face)), shade=False,
+            rstride=1, cstride=1, antialiased=False, linewidth=0, zorder=1,
+        )
+        normal = np.zeros(3)
+        normal[i_axis] = -1.0 if end == 0 else 1.0
+        face_normals[(face_axis, end)] = normal
+    ax3d.set_xlabel("$x$")
+    ax3d.set_ylabel("$y$")
+    ax3d.set_zlabel("$z$")
+    ax3d.set_box_aspect((1, 1, 1))
+
+    def cull_back_faces() -> bool:
+        azim, elev = np.deg2rad(ax3d.azim), np.deg2rad(ax3d.elev)
+        toward_camera = np.array([
+            np.cos(elev) * np.cos(azim),
+            np.cos(elev) * np.sin(azim),
+            np.sin(elev),
+        ])
+        changed = False
+        for key, artist in face_artists.items():
+            visible = float(face_normals[key] @ toward_camera) > 0
+            if artist.get_visible() != visible:
+                artist.set_visible(visible)
+                changed = True
+        return changed
+
+    # slice frame: four deep-red strips outside the cube plus an outline
+    pad = 0.10 * (u[-1] - u[0])
+    deep_red = (0.55, 0.0, 0.0, 0.9)
+    marker_artists = []
+
+    def draw_marker(slice_index: int) -> None:
+        for artist in marker_artists:
+            artist.remove()
+        marker_artists.clear()
+        u_lo, u_hi = u[0] - pad, u[-1] + pad
+        v_lo, v_hi = v[0] - pad, v[-1] + pad
+        strips = (
+            ((u_lo, u[0]), (v_lo, v_hi)),
+            ((u[-1], u_hi), (v_lo, v_hi)),
+            ((u[0], u[-1]), (v_lo, v[0])),
+            ((u[0], u[-1]), (v[-1], v_hi)),
+        )
+        for (ua, ub), (va, vb) in strips:
+            U2, V2 = np.meshgrid([ua, ub], [va, vb], indexing="ij")
+            xyz = [None, None, None]
+            xyz[axis_index] = np.full_like(U2, along[slice_index])
+            xyz[plane_axes[0]], xyz[plane_axes[1]] = U2, V2
+            marker_artists.append(
+                ax3d.plot_surface(*xyz, color=deep_red, shade=False,
+                                  antialiased=False, linewidth=0, zorder=10)
+            )
+        ring_u = [u_lo, u_hi, u_hi, u_lo, u_lo]
+        ring_v = [v_lo, v_lo, v_hi, v_hi, v_lo]
+        xyz = [None, None, None]
+        xyz[axis_index] = [along[slice_index]] * 5
+        xyz[plane_axes[0]], xyz[plane_axes[1]] = ring_u, ring_v
+        marker_artists.append(
+            ax3d.plot(*xyz, color="darkred", lw=2.5, zorder=11)[0]
+        )
+
+    cull_back_faces()
+    return draw_marker, cull_back_faces
 
 
 def fft_power_iso(
@@ -1214,8 +1338,9 @@ class Data(BaseProperties):
         show_colorbar: bool = True,
         colorbar_label: Optional[str] = None,
         slice_axis: Literal["x", "y", "z"] = "x",
+        context_3d: bool = True,
         **kwargs,
-    ) -> Tuple[Axes, Union[Line2D, QuadMesh]]:
+    ) -> Tuple[Axes, Union[Line2D, QuadMesh, AxesImage]]:
         """
         Plot 1D, 2D, or 3D data.
 
@@ -1230,20 +1355,31 @@ class Data(BaseProperties):
             colorbar_label: Label for the colorbar.
             slice_axis: Slice axis for 3D data. Must be "x", "y", or "z".
                 The left/right arrow keys step the slice by one.
+            context_3d: For 3D data, also show a rotatable cube of the
+                volume's outer faces with a frame marking the current slice.
+                Ignored when `ax` is given.
             **kwargs: Additional keyword arguments for the plotting functions.
 
         Returns:
-            Matplotlib Axes and plot object.
+            Matplotlib Axes and plot object. For 3D data the slice is drawn
+            with imshow, so the plot object is an AxesImage.
         """
 
         num_dimensions = len(self._get_data_shape())
         if not 1 <= num_dimensions <= 3:
             raise NotImplementedError("Plotting is restricted to 1D, 2D, or 3D data.")
 
+        ax3d = None
         if ax is None:
-            fig, ax = plt.subplots(figsize=(8, 6), dpi=dpi)
-            if num_dimensions == 3:
-                plt.subplots_adjust(bottom=0.2)
+            if num_dimensions == 3 and context_3d:
+                fig = plt.figure(figsize=(12, 5.5), dpi=dpi)
+                ax = fig.add_subplot(1, 2, 1)
+                ax3d = fig.add_subplot(1, 2, 2, projection="3d")
+                plt.subplots_adjust(bottom=0.2, wspace=0.05)
+            else:
+                fig, ax = plt.subplots(figsize=(8, 6), dpi=dpi)
+                if num_dimensions == 3:
+                    plt.subplots_adjust(bottom=0.2)
         else:
             fig = ax.figure
 
@@ -1287,45 +1423,64 @@ class Data(BaseProperties):
             zdata = self._materialize(self.zdata)
             zlimdata = self._materialize(self.zlimdata)
 
-            initial_slice = 0
-            initial_data_slice = self._read_2d_slice(slice_axis, initial_slice)
+            axis_coords = {"x": xdata, "y": ydata, "z": zdata}[slice_axis]
             if slice_axis == "x":
-                A, B = np.meshgrid(ydata, zdata, indexing="ij")
-                initial_position_str = f"\nx = {xdata[initial_slice]:.2f}"
+                extent = (*ylimdata, *zlimdata)
                 ax.set_xlabel(ylabel if ylabel else "$y$")
                 ax.set_ylabel(zlabel if zlabel else "$z$")
                 ax.set_xlim(ylim if ylim else ylimdata)
                 ax.set_ylim(zlim if zlim else zlimdata)
             elif slice_axis == "y":
-                A, B = np.meshgrid(xdata, zdata, indexing="ij")
-                initial_position_str = f"\ny = {ydata[initial_slice]:.2f}"
+                extent = (*xlimdata, *zlimdata)
                 ax.set_xlabel(xlabel if xlabel else "$x$")
                 ax.set_ylabel(zlabel if zlabel else "$z$")
                 ax.set_xlim(xlim if xlim else xlimdata)
                 ax.set_ylim(zlim if zlim else zlimdata)
             else:
-                A, B = np.meshgrid(xdata, ydata, indexing="ij")
-                initial_position_str = f"\nz = {zdata[initial_slice]:.2f}"
+                extent = (*xlimdata, *ylimdata)
                 ax.set_xlabel(xlabel if xlabel else "$x$")
                 ax.set_ylabel(ylabel if ylabel else "$y$")
                 ax.set_xlim(xlim if xlim else xlimdata)
                 ax.set_ylim(ylim if ylim else ylimdata)
 
-            mesh = ax.pcolormesh(
-                A,
-                B,
-                initial_data_slice,
+            initial_slice = 0
+            initial_data_slice = self._read_2d_slice(slice_axis, initial_slice)
+            # imshow instead of pcolormesh: the grid is uniform, and swapping
+            # the image data per slider tick is far cheaper than re-rendering
+            # a quad mesh
+            kwargs.setdefault("origin", "lower")
+            kwargs.setdefault("interpolation", "nearest")
+            kwargs.setdefault("aspect", "auto")
+            mesh = ax.imshow(
+                initial_data_slice.T,
+                extent=extent,
                 cmap=colormap,
-                shading="auto",
                 **kwargs,
             )
 
+            initial_position_str = (
+                f"\n{slice_axis} = {axis_coords[initial_slice]:.2f}"
+            )
             ax.set_title(
                 title if title else f"{self._plot_title}{initial_position_str}"
             )
             if show_colorbar:
                 cbar = plt.colorbar(mesh, ax=ax)
                 cbar.set_label(colorbar_label if colorbar_label else f"{self.name}")
+
+            if ax3d is not None:
+                draw_marker, cull_back_faces = _add_slice_context(
+                    ax3d, self, slice_axis, colormap
+                )
+                draw_marker(initial_slice)
+
+                def on_motion(event) -> None:
+                    if event.inaxes is ax3d and cull_back_faces():
+                        fig.canvas.draw_idle()
+
+                fig.canvas.mpl_connect("motion_notify_event", on_motion)
+            else:
+                draw_marker = None
 
             ax_slider = fig.add_axes([0.2, 0.05, 0.6, 0.03])
             full_shape = self._get_data_shape()
@@ -1342,18 +1497,14 @@ class Data(BaseProperties):
             def update(val: float) -> None:
                 slice_index = int(slider.val)
                 data_slice = self._read_2d_slice(slice_axis, slice_index)
-                if slice_axis == "x":
-                    position_str = f"\nx = {xdata[slice_index]:.2f}"
-                elif slice_axis == "y":
-                    position_str = f"\ny = {ydata[slice_index]:.2f}"
-                else:
-                    position_str = f"\nz = {zdata[slice_index]:.2f}"
-
+                position_str = f"\n{slice_axis} = {axis_coords[slice_index]:.2f}"
                 ax.set_title(title if title else f"{self._plot_title}{position_str}")
-                mesh.set_array(data_slice.ravel())
+                mesh.set_data(data_slice.T)
                 # Rescale color limits to the new slice's data range so the
                 # colorbar reflects what is being shown.
                 mesh.set_clim(float(data_slice.min()), float(data_slice.max()))
+                if draw_marker is not None:
+                    draw_marker(slice_index)
                 fig.canvas.draw_idle()
 
             slider.on_changed(update)
