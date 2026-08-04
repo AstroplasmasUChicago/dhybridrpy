@@ -3,7 +3,6 @@ import h5py
 import numpy as np
 import pytest
 
-import dhybridrpy.dhybridrpy as dhy_mod
 from dhybridrpy import DHybridrpy
 
 DT = 0.5
@@ -53,7 +52,7 @@ def install_open_counter(monkeypatch):
             counts["n"] += 1
             super().__init__(*args, **kwargs)
 
-    monkeypatch.setattr(dhy_mod.h5py, "File", CountingFile)
+    monkeypatch.setattr(h5py, "File", CountingFile)
     return counts
 
 
@@ -115,6 +114,18 @@ def test_t0_in_deck_still_parses(tmp_path):
     dp = DHybridrpy(inp, out)
     assert dp.start_time == 0.0
     assert dp._derive_times
+
+
+def test_metadata_uses_single_open(tmp_path, monkeypatch):
+    inp, out = make_tree(tmp_path)
+    dp = DHybridrpy(inp, out)
+    field = dp.timestep(10).fields.Bx("Total")
+    counts = install_open_counter(monkeypatch)
+    field._get_data_shape()
+    field._get_data_dtype()
+    field.xlimdata
+    field.ylimdata
+    assert counts["n"] == 1  # shape, dtype, and axis limits share one open
 
 
 def test_currentdens_naming_with_shared_components(tmp_path):

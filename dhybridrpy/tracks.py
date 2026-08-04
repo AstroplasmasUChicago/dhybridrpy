@@ -1,9 +1,10 @@
 import logging
-import h5py
 import numpy as np
 import dask.array as da
 from dask.delayed import delayed
 from typing import Union, List, Optional, Dict
+
+from .data import open_h5
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ class Track:
     def _get_available_keys(self) -> List[str]:
         """Get list of available datasets for this track."""
         if self._available_keys is None:
-            with h5py.File(self.file_path, "r") as f:
+            with open_h5(self.file_path) as f:
                 self._available_keys = list(f[self._group_name].keys())
         return self._available_keys
 
@@ -55,17 +56,17 @@ class Track:
             )
 
         if self.lazy:
-            with h5py.File(self.file_path, "r") as f:
+            with open_h5(self.file_path) as f:
                 shape = f[self._group_name][key].shape
                 dtype = f[self._group_name][key].dtype
 
             def loader(k=key):
-                with h5py.File(self.file_path, "r") as f:
+                with open_h5(self.file_path) as f:
                     return f[self._group_name][k][:]
 
             return da.from_delayed(delayed(loader)(), shape=shape, dtype=dtype)
 
-        with h5py.File(self.file_path, "r") as f:
+        with open_h5(self.file_path) as f:
             return f[self._group_name][key][:]
 
     @property
@@ -194,7 +195,7 @@ class TrackCollection:
     def track_ids(self) -> np.ndarray:
         """Array of all track IDs in this collection (format: 'rank-tag')."""
         if self._track_ids is None:
-            with h5py.File(self.file_path, "r") as f:
+            with open_h5(self.file_path) as f:
                 ids = list(f.keys())
             # Sort by (MPI rank, tag) numerically
             ids.sort(key=lambda x: tuple(map(int, x.split("-"))))

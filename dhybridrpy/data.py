@@ -15,6 +15,18 @@ from dask.delayed import delayed
 # Standalone functions for numpy arrays
 
 
+def open_h5(file_path: str, **kwargs) -> h5py.File:
+    """Open an HDF5 file read-only without file locking, which reading does
+    not need and which costs extra round trips on network filesystems.
+
+    Two consequences: a file being written by a running simulation opens
+    without error (possibly reading a partial dump), and holding a separate
+    default-locking handle to the same file in the same process fails with
+    "file locking flag values don't match".
+    """
+    return h5py.File(file_path, "r", locking=False, **kwargs)
+
+
 def fft_power_iso(
     data: np.ndarray,
     Lx: float,
@@ -331,11 +343,26 @@ class Data(BaseProperties):
         self._data_shape = None
         self._data_dtype = None
 
+    def _load_metadata(self) -> None:
+        """Read shape, dtype, and all axis limits in a single file open."""
+        with open_h5(self.file_path) as file:
+            dataset = file["DATA"]
+            if self._data_shape is None:
+                # Reverse the data shape to be consistent with transpose in data @property
+                self._data_shape = dataset.shape[::-1]
+            if self._data_dtype is None:
+                self._data_dtype = dataset.dtype
+            axis_group = file.get("AXIS")
+            if axis_group is not None:
+                for axis_name in axis_group:
+                    key = f"{axis_name} lims"
+                    if key not in self._data_dict:
+                        self._data_dict[key] = axis_group[axis_name][:]
+
     def _get_coordinate_limits(self, axis_name: str) -> np.ndarray:
         key = f"{axis_name} lims"
         if key not in self._data_dict:
-            with h5py.File(self.file_path, "r") as file:
-                self._data_dict[key] = file["AXIS"][axis_name][:]
+            self._load_metadata()
         return self._data_dict[key]
 
     def _compute_coordinates(
@@ -368,7 +395,7 @@ class Data(BaseProperties):
 
         # HDF5 stores (nz, ny, nx); after the .T in `data`, the numpy convention
         # is (nx, ny, nz). Mirror that here while reading only what's needed.
-        with h5py.File(self.file_path, "r") as f:
+        with open_h5(self.file_path) as f:
             ds = f["DATA"]
             if slice_axis == "x":
                 return np.asarray(ds[:, :, idx]).T  # -> (ny, nz)
@@ -389,16 +416,13 @@ class Data(BaseProperties):
     def _get_data_shape(self) -> Tuple[int, ...]:
         """Retrieve the shape of the data without loading it."""
         if self._data_shape is None:
-            with h5py.File(self.file_path, "r") as file:
-                # Reverse the data shape to be consistent with transpose in data @property
-                self._data_shape = file["DATA"].shape[::-1]
+            self._load_metadata()
         return self._data_shape
 
     def _get_data_dtype(self) -> np.dtype:
         """Retrieve the type of the data without loading it."""
         if self._data_dtype is None:
-            with h5py.File(self.file_path, "r") as file:
-                self._data_dtype = file["DATA"].dtype
+            self._load_metadata()
         return self._data_dtype
 
     @property
@@ -412,7 +436,7 @@ class Data(BaseProperties):
         # Otherwise, always re-read from HDF5 without caching to avoid OOM
         # when iterating over many timesteps.
         def loader():
-            with h5py.File(self.file_path, "r") as f:
+            with open_h5(self.file_path) as f:
                 return f["DATA"][:].T
 
         if self.lazy:
@@ -1325,14 +1349,14 @@ class Raw(BaseProperties):
         avoid OOM when iterating over many timesteps. Matches Data.data.
         """
         result = {}
-        with h5py.File(self.file_path, "r") as file:
+        with open_h5(self.file_path) as file:
             for key in file.keys():
                 if self.lazy:
                     shape = file[key].shape
                     dtype = file[key].dtype
 
                     def dict_helper(key=key):
-                        with h5py.File(self.file_path, "r") as f:
+                        with open_h5(self.file_path) as f:
                             return f[key][:]
 
                     delayed_helper = delayed(dict_helper)()

@@ -5,12 +5,11 @@ import os
 import re
 
 import f90nml
-import h5py
 import numpy as np
 from f90nml import Namelist
 
 from .containers import Timestep
-from .data import Field, Phase, Raw
+from .data import Field, Phase, Raw, open_h5
 from .tracks import Track, TrackCollection
 
 logging.basicConfig(level=logging.INFO)
@@ -173,7 +172,7 @@ class DHybridrpy:
         samples = []
         for timestep, filepath in sorted({min(nonzero), max(nonzero)}):
             try:
-                with h5py.File(filepath, "r") as f:
+                with open_h5(filepath) as f:
                     file_time = float(f.attrs["TIME"][0])
             except (OSError, KeyError):
                 logger.warning(
@@ -183,17 +182,22 @@ class DHybridrpy:
                 return
             samples.append((timestep, filepath, file_time))
 
-        implied = [(t / ts, fp) for ts, fp, t in samples if ts != 0]
-        if len(implied) == 2 and not math.isclose(
-            implied[0][0], implied[1][0], rel_tol=1e-5
-        ):
-            raise ValueError(
-                f"Output folder contains files written with different time "
-                f"steps: {implied[0][1]} implies dt={implied[0][0]:.6g} but "
-                f"{implied[1][1]} implies dt={implied[1][0]:.6g}. A run with "
-                f"fixed dt cannot produce this; check that the output folder "
-                f"holds a single run's output."
-            )
+        # dt each file claims it was written with (TIME / iteration);
+        # iteration-0 files say nothing about dt
+        implied_dt = [
+            (time / iteration, path) for iteration, path, time in samples
+            if iteration != 0
+        ]
+        if len(implied_dt) > 1:
+            (dt_lo, file_lo), (dt_hi, file_hi) = min(implied_dt), max(implied_dt)
+            if not math.isclose(dt_lo, dt_hi, rel_tol=1e-5):
+                raise ValueError(
+                    f"Output folder contains files written with different time "
+                    f"steps: {file_lo} implies dt={dt_lo:.6g} but {file_hi} "
+                    f"implies dt={dt_hi:.6g}. A run with fixed dt cannot "
+                    f"produce this; check that the output folder holds a "
+                    f"single run's output."
+                )
 
         for timestep, filepath, file_time in samples:
             derived = timestep * self.dt
@@ -211,7 +215,7 @@ class DHybridrpy:
             if self._derive_times:
                 self._timestep_times[timestep] = timestep * self.dt
             else:
-                with h5py.File(filepath, "r") as f:
+                with open_h5(filepath) as f:
                     self._timestep_times[timestep] = float(f.attrs["TIME"][0])
         return self._timestep_times[timestep]
 
