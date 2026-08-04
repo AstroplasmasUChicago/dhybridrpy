@@ -31,7 +31,8 @@ class DHybridrpy(
 | `lazy` | `bool` | Whether lazy loading is enabled |
 | `inputs` | `Namelist` | Parsed input file as a dictionary-like object |
 | `dt` | `float` | Simulation timestep size (from input file) |
-| `start_time` | `float` | Simulation start time (from input file) |
+| `start_time` | `float` | Deprecated `t0` from the input file; 0.0 when absent (dHybridR never applied it) |
+| `adaptive_dt` | `bool` | Whether the run used adaptive time stepping (from input file) |
 
 ## Methods
 

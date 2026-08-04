@@ -1,5 +1,6 @@
 import io
 import logging
+import math
 import os
 import re
 
@@ -91,6 +92,7 @@ class DHybridrpy:
     _PHASE_MAPPING = {"FluidVel": "V", "PressureTen": "P"}
     _COMPONENT_MAPPING = {"Intensity": "magnitude"}
     _SPECIES_PATTERN = re.compile(r"\d+")
+    _TIMESTEP_PATTERN = re.compile(r"_(\d+)\.h5$")
     _TIME_NDECIMALS = 6
 
     def __init__(
@@ -113,6 +115,7 @@ class DHybridrpy:
         self._validate_paths()
         self.inputs = InputFileParser(input_file).input_dict
         self._get_time_inputs()
+        self._decide_time_mode()
         self._traverse_directory()
         self._discover_tracks()
 
@@ -120,13 +123,17 @@ class DHybridrpy:
         try:
             time_dict = self.inputs["time"]
             self.dt = time_dict["dt"]
-            self.start_time = time_dict["t0"]
         except KeyError as e:
             missing_key = e.args[0]
             raise KeyError(
                 f"Required key '{missing_key}' not found in input file's "
                 f"'time' section."
             ) from e
+        # float(): f90nml parses literals like dt=1 as int
+        self.dt = float(self.dt)
+        # t0 is deprecated in dHybridR (never applied); old decks may still set it
+        self.start_time = float(time_dict.get("t0", 0.0))
+        self.adaptive_dt = time_dict.get("adaptive_dt", False)
 
     def _validate_paths(self) -> None:
         if not os.path.exists(self.input_file):
@@ -136,15 +143,63 @@ class DHybridrpy:
                 f"Output folder {self.output_folder} is not a directory."
             )
 
-    def _get_time_from_h5(self, filepath: str, timestep: int) -> float:
-        """Read the TIME attribute from an HDF5 file, caching per timestep."""
+    def _decide_time_mode(self) -> None:
+        """Decide whether times can be computed as timestep*dt instead of read
+        from every file, which costs one file open per timestep. The earliest
+        and latest output files are checked first; if either TIME attribute
+        disagrees with timestep*dt, times are read from files as before.
+        """
+        self._derive_times = False
+        if self.adaptive_dt:
+            return
+
+        candidates = []
+        for dirpath, _, filenames in os.walk(self.output_folder):
+            top = os.path.relpath(dirpath, self.output_folder).split(os.sep)[0]
+            if top not in ("Fields", "Phase", "Raw"):
+                continue
+            for filename in filenames:
+                match = self._TIMESTEP_PATTERN.search(filename)
+                if match:
+                    candidates.append(
+                        (int(match.group(1)), os.path.join(dirpath, filename))
+                    )
+        if not candidates:
+            return
+
+        nonzero = [c for c in candidates if c[0] != 0] or candidates
+        for timestep, filepath in sorted({min(nonzero), max(nonzero)}):
+            try:
+                with h5py.File(filepath, "r") as f:
+                    file_time = float(f.attrs["TIME"][0])
+            except (OSError, KeyError):
+                logger.warning(
+                    f"Could not read TIME from {filepath}; "
+                    f"reading times from files instead."
+                )
+                return
+            derived = timestep * self.dt
+            if not math.isclose(derived, file_time, rel_tol=1e-5, abs_tol=1e-9):
+                logger.warning(
+                    f"TIME attribute in {filepath} ({file_time}) does not match "
+                    f"iteration*dt ({derived}); reading times from files instead."
+                )
+                return
+        self._derive_times = True
+
+    def _time_for_timestep(self, filepath: str, timestep: int) -> float:
+        """Time for a timestep: derived as timestep*dt, or read from HDF5."""
         if timestep not in self._timestep_times:
-            with h5py.File(filepath, "r") as f:
-                self._timestep_times[timestep] = float(f.attrs["TIME"][0])
+            if self._derive_times:
+                self._timestep_times[timestep] = timestep * self.dt
+            else:
+                with h5py.File(filepath, "r") as f:
+                    self._timestep_times[timestep] = float(f.attrs["TIME"][0])
         return self._timestep_times[timestep]
 
-    def _process_file(self, dirpath: str, filename: str, timestep: int) -> None:
-        folder_components = os.path.relpath(dirpath, self.output_folder).split(os.sep)
+    def _process_file(
+        self, dirpath: str, filename: str, timestep: int, folder_components: list
+    ) -> None:
         output_type = folder_components[0]
 
         if output_type == "Fields":
@@ -179,7 +234,7 @@ class DHybridrpy:
             self._timesteps_dict[timestep] = Timestep(timestep)
         self._field_phase_timesteps.add(timestep)
         filepath = os.path.join(dirpath, filename)
-        time = self._get_time_from_h5(filepath, timestep)
+        time = self._time_for_timestep(filepath, timestep)
         field = Field(
             filepath,
             name,
@@ -228,7 +283,7 @@ class DHybridrpy:
             self._timesteps_dict[timestep] = Timestep(timestep)
         self._field_phase_timesteps.add(timestep)
         filepath = os.path.join(dirpath, filename)
-        time = self._get_time_from_h5(filepath, timestep)
+        time = self._time_for_timestep(filepath, timestep)
         phase = Phase(
             filepath,
             name,
@@ -257,18 +312,19 @@ class DHybridrpy:
             self._timesteps_dict[timestep] = Timestep(timestep)
         self._raw_timesteps.add(timestep)
         filepath = os.path.join(dirpath, filename)
-        time = self._get_time_from_h5(filepath, timestep)
+        time = self._time_for_timestep(filepath, timestep)
         raw = Raw(filepath, name, timestep, time, self.lazy, species)
         self._timesteps_dict[timestep].add_raw(raw)
 
     def _traverse_directory(self) -> None:
-        TIMESTEP_PATTERN = re.compile(r"_(\d+)\.h5$")
         for dirpath, _, filenames in os.walk(self.output_folder):
+            components = os.path.relpath(dirpath, self.output_folder).split(os.sep)
             for filename in filenames:
-                match = TIMESTEP_PATTERN.search(filename)
+                match = self._TIMESTEP_PATTERN.search(filename)
                 if match:
                     timestep = int(match.group(1))
-                    self._process_file(dirpath, filename, timestep)
+                    # copy: _process_field mutates the list for CurrentDens
+                    self._process_file(dirpath, filename, timestep, list(components))
 
     def timestep(self, ts: int) -> Timestep:
         """Access field, phase, and raw file information at a given timestep."""
