@@ -37,7 +37,8 @@ def fft_power_iso(
     Returns:
         Tuple of (k, power) where:
             - k: 1D array of wavenumber values (in units of 2π/L)
-            - power: 1D array of power spectral density at each k
+            - power: 1D array of power spectral density at each k (float64
+              regardless of input dtype)
     """
     num_dimensions = data.ndim
     if num_dimensions < 1 or num_dimensions > 3:
@@ -58,8 +59,11 @@ def fft_power_iso(
         k_bins = np.arange(0, k_max + dk, dk)
         k_centers = 0.5 * (k_bins[:-1] + k_bins[1:])
 
-        # Bin the spectrum
-        binned_power, _ = np.histogram(np.abs(k), bins=k_bins, weights=power)
+        # Bin the spectrum. np.histogram accumulates in the weights dtype, so
+        # float32 power would drop small contributions to large shell sums.
+        binned_power, _ = np.histogram(
+            np.abs(k), bins=k_bins, weights=power.astype(np.float64, copy=False)
+        )
         if normalize:  # per-mode average: divide by the mode count in each bin
             counts, _ = np.histogram(np.abs(k), bins=k_bins)
             binned_power = np.divide(
@@ -95,7 +99,7 @@ def fft_power_iso(
 
         # Binning
         K_flat = K.ravel()
-        P_flat = power_2d.ravel()
+        P_flat = power_2d.ravel().astype(np.float64, copy=False)
 
         # Sum the power in each radial bin (energy spectrum)
         radial_sum, _ = np.histogram(K_flat, bins=k_bins, weights=P_flat)
@@ -140,7 +144,7 @@ def fft_power_iso(
 
         # Binning
         K_flat = K.ravel()
-        P_flat = power_3d.ravel()
+        P_flat = power_3d.ravel().astype(np.float64, copy=False)
 
         # Sum the power in each radial bin (energy spectrum)
         radial_sum, _ = np.histogram(K_flat, bins=k_bins, weights=P_flat)
@@ -180,6 +184,7 @@ def fft_power_1d_slices(
             - power_mean: 1D array of geometric mean power at each k
             - power_std_lower: 1D array of geometric mean / multiplicative std
             - power_std_upper: 1D array of geometric mean × multiplicative std
+        All power arrays are float64 regardless of input dtype.
     """
     if direction not in ["x", "y", "z"]:
         raise ValueError("Direction must be 'x', 'y', or 'z'.")
@@ -219,9 +224,12 @@ def fft_power_1d_slices(
     doubler[axis] = slice(1, -1 if n % 2 == 0 else None)
     power[tuple(doubler)] *= 2
 
-    # Move FFT axis to the end and collapse the remaining dims into "slices"
+    # Move FFT axis to the end and collapse the remaining dims into "slices";
+    # float64 so the naive variance below doesn't lose precision.
     power = np.moveaxis(power, axis, -1)
-    power_spectra = power.reshape(-1, power.shape[-1])
+    power_spectra = power.reshape(-1, power.shape[-1]).astype(
+        np.float64, copy=False
+    )
 
     # Geometric statistics in log space, computed only over positive entries
     # per bin. Bins where every slice has zero power return 0 for mean/lo/hi
@@ -739,7 +747,13 @@ class Data(BaseProperties):
         fractions = (x_range, y_range, z_range)[: len(shape)]
 
         index_slices = []
-        axis_overrides = {}
+        # Seed with the parent's axis entries so chaining crops keeps the
+        # lims/coords of axes cropped in an earlier call.
+        axis_overrides = {
+            k: (v.copy() if isinstance(v, np.ndarray) else v)
+            for k, v in self._data_dict.items()
+            if "AXIS" in k
+        }
         for axis_name, size, frac_range in zip(axis_names, shape, fractions):
             if frac_range is None:
                 index_slices.append(slice(None))
@@ -761,7 +775,10 @@ class Data(BaseProperties):
                 [limits[0] + delta * i0, limits[0] + delta * i1]
             )
             coords = self._compute_coordinates(axis_name, size)
-            axis_overrides[f"{axis_name} coords"] = coords[i0:i1]
+            sliced_coords = coords[i0:i1]
+            if isinstance(sliced_coords, np.ndarray):
+                sliced_coords = sliced_coords.copy()
+            axis_overrides[f"{axis_name} coords"] = sliced_coords
 
         inst = self.__class__(
             self.file_path,
@@ -774,6 +791,9 @@ class Data(BaseProperties):
         )
         inst._data_dict = axis_overrides
         cropped = self.data[tuple(index_slices)]
+        # Copy: a numpy view here would keep the entire parent array alive.
+        if isinstance(cropped, np.ndarray):
+            cropped = cropped.copy()
         inst._data_dict[self.name] = cropped
         inst._data_shape = tuple(cropped.shape)
         inst._data_dtype = getattr(cropped, "dtype", None)
