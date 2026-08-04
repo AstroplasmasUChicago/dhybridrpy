@@ -68,6 +68,55 @@ def hdf5_field(tmp_path):
     return str(fp), data
 
 
+def install_open_counter(monkeypatch):
+    counts = {"n": 0}
+    real_file = h5py.File
+
+    class CountingFile(real_file):
+        def __init__(self, *args, **kwargs):
+            counts["n"] += 1
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(h5py, "File", CountingFile)
+    return counts
+
+
+def test_same_operand_expressions_read_once(hdf5_field, monkeypatch):
+    fp, raw = hdf5_field
+    field = Field(fp, "Bx", 100, 1.0, 6, lazy=False, field_type="Total")
+    field._get_data_shape()  # warm the metadata
+
+    counts = install_open_counter(monkeypatch)
+    squared = field * field
+    assert counts["n"] == 1  # one read, not one per operand
+    np.testing.assert_array_equal(squared.data, raw.T * raw.T)
+
+    counts["n"] = 0
+    hypot = np.hypot(field, field)
+    assert counts["n"] == 1
+    np.testing.assert_allclose(
+        hypot.data, np.hypot(raw.T, raw.T), rtol=1e-6
+    )
+
+
+def test_distinct_operands_still_read_separately(hdf5_field, monkeypatch):
+    fp, raw = hdf5_field
+    field_a = Field(fp, "Bx", 100, 1.0, 6, lazy=False, field_type="Total")
+    field_b = Field(fp, "Bx", 100, 1.0, 6, lazy=False, field_type="Total")
+    for field in (field_a, field_b):
+        field._get_data_shape()
+
+    counts = install_open_counter(monkeypatch)
+    total = field_a + field_b
+    assert counts["n"] == 2
+    np.testing.assert_array_equal(total.data, raw.T + raw.T)
+
+    counts["n"] = 0
+    angles = np.arctan2(field_a, field_b)
+    assert counts["n"] == 2  # distinct ufunc operands each read their file
+    np.testing.assert_allclose(angles.data, np.arctan2(raw.T, raw.T), rtol=1e-6)
+
+
 def test_crop_does_not_retain_parent_array(hdf5_field):
     fp, raw = hdf5_field
     field = Field(fp, "Bx", 100, 1.0, 6, lazy=False, field_type="Total")

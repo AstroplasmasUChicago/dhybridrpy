@@ -710,7 +710,10 @@ class Data(BaseProperties):
 
         if isinstance(other, Data):
             self._check_compatibility(other)
-            result = op(self.data, other.data)
+            left = self.data
+            # expressions like bx * bx should read the file once, not twice
+            right = left if other is self else other.data
+            result = op(left, right)
             other_name = other.name
         else:
             result = op(self.data, other)
@@ -833,12 +836,17 @@ class Data(BaseProperties):
         if method != "__call__":
             return NotImplemented  # only allow element‑wise operations
 
-        # Extract raw arrays and gather Data operands for naming / compat checks
+        # Extract raw arrays and gather Data operands for naming / compat
+        # checks. A Data object appearing more than once, as in
+        # np.arctan2(by, by), is read only once.
         raw_inputs, data_operands = [], []
+        materialized = {}
         for input in inputs:
             if isinstance(input, Data):
                 data_operands.append(input)
-                raw_inputs.append(input.data)
+                if id(input) not in materialized:
+                    materialized[id(input)] = input.data
+                raw_inputs.append(materialized[id(input)])
             else:
                 raw_inputs.append(input)
 
