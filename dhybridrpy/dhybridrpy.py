@@ -238,10 +238,20 @@ class DHybridrpy:
     def _process_field(
         self, dirpath: str, filename: str, timestep: int, folder_components: list
     ) -> None:
+        if len(folder_components) < 3:
+            logger.warning(
+                f"Unrecognized folder layout for {filename}. File not processed."
+            )
+            return
         category = folder_components[1]
         if category == "CurrentDens":
             folder_components.insert(2, "Total")
         field_type = folder_components[-2]
+        if field_type not in ("Total", "External", "Self"):
+            logger.warning(
+                f"Unknown field type folder '{field_type}'. Skipping {filename}"
+            )
+            return
         component = folder_components[-1]
         if component in self._COMPONENT_MAPPING:
             component = self._COMPONENT_MAPPING[component]
@@ -252,11 +262,15 @@ class DHybridrpy:
             return
 
         name = f"{prefix}{component}"
+        filepath = os.path.join(dirpath, filename)
+        try:
+            time = self._time_for_timestep(filepath, timestep)
+        except (OSError, KeyError):
+            logger.warning(f"Could not read {filepath}; file skipped.")
+            return
         if timestep not in self._timesteps_dict:
             self._timesteps_dict[timestep] = Timestep(timestep)
         self._field_phase_timesteps.add(timestep)
-        filepath = os.path.join(dirpath, filename)
-        time = self._time_for_timestep(filepath, timestep)
         field = Field(
             filepath,
             name,
@@ -271,6 +285,11 @@ class DHybridrpy:
     def _process_phase(
         self, dirpath: str, filename: str, timestep: int, folder_components: list
     ) -> None:
+        if len(folder_components) < 2:
+            logger.warning(
+                f"Unrecognized folder layout for {filename}. File not processed."
+            )
+            return
         name = folder_components[1]
 
         # Manage bulk velocity, pressure tensor, and scalar pressure special cases
@@ -301,11 +320,15 @@ class DHybridrpy:
                 )
                 return
             species = int(match.group())
+        filepath = os.path.join(dirpath, filename)
+        try:
+            time = self._time_for_timestep(filepath, timestep)
+        except (OSError, KeyError):
+            logger.warning(f"Could not read {filepath}; file skipped.")
+            return
         if timestep not in self._timesteps_dict:
             self._timesteps_dict[timestep] = Timestep(timestep)
         self._field_phase_timesteps.add(timestep)
-        filepath = os.path.join(dirpath, filename)
-        time = self._time_for_timestep(filepath, timestep)
         phase = Phase(
             filepath,
             name,
@@ -330,16 +353,23 @@ class DHybridrpy:
             )
             return
         species = int(match.group())
+        filepath = os.path.join(dirpath, filename)
+        try:
+            time = self._time_for_timestep(filepath, timestep)
+        except (OSError, KeyError):
+            logger.warning(f"Could not read {filepath}; file skipped.")
+            return
         if timestep not in self._timesteps_dict:
             self._timesteps_dict[timestep] = Timestep(timestep)
         self._raw_timesteps.add(timestep)
-        filepath = os.path.join(dirpath, filename)
-        time = self._time_for_timestep(filepath, timestep)
         raw = Raw(filepath, name, timestep, time, self.lazy, species)
         self._timesteps_dict[timestep].add_raw(raw)
 
     def _traverse_directory(self) -> None:
-        for dirpath, _, filenames in os.walk(self.output_folder):
+        def report(error):
+            logger.warning(f"Could not list {error.filename}: {error}")
+
+        for dirpath, _, filenames in os.walk(self.output_folder, onerror=report):
             components = os.path.relpath(dirpath, self.output_folder).split(os.sep)
             for filename in filenames:
                 match = self._TIMESTEP_PATTERN.search(filename)
@@ -360,7 +390,10 @@ class DHybridrpy:
         timesteps = self.timesteps()
         if len(timesteps) == 0:
             raise ValueError("No timesteps available.")
-        closest_ts = timesteps[np.argmin(np.abs(timesteps - ts))]
+        try:
+            closest_ts = timesteps[np.argmin(np.abs(timesteps - ts))]
+        except OverflowError:
+            closest_ts = min(timesteps, key=lambda x: abs(int(x) - ts))
         if verbose:
             logger.info(
                 f"Requested timestep: {ts}. Closest available timestep: {closest_ts}."

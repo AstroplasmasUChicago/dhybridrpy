@@ -9,6 +9,7 @@ import os
 import sys
 import threading
 from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from multiprocessing import get_context
 
 import h5py
@@ -45,6 +46,13 @@ def spawn_is_safe() -> bool:
     # either its module spec or its file path
     spec_name = getattr(getattr(main, "__spec__", None), "name", None)
     return spec_name is None and not hasattr(main, "__file__")
+
+
+def _broken_pool_hint(error):
+    return RuntimeError(
+        "Worker processes died during startup. If this call runs in a "
+        "script, put it under `if __name__ == \"__main__\":`."
+    )
 
 
 def _open(path):
@@ -118,8 +126,11 @@ def gather_data(paths, workers: int = None) -> np.ndarray:
                         tuple(int(s) for s in shape), dtype.str)
             for i, path in enumerate(paths)
         ]
-        for future in futures:
-            future.result()
+        try:
+            for future in futures:
+                future.result()
+        except BrokenProcessPool as error:
+            raise _broken_pool_hint(error) from error
         result = np.ndarray(
             (len(paths), *shape), dtype=dtype, buffer=shm.buf
         ).copy()

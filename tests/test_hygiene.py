@@ -44,8 +44,15 @@ def test_coordinates_shared_between_objects(tmp_path):
     write_plane(fp)
     field_a = Field(str(fp), "Bx", 100, 1.0, 6, lazy=False, field_type="Total")
     field_b = Field(str(fp), "By", 100, 1.0, 6, lazy=False, field_type="Total")
-    assert field_a.xdata is field_b.xdata  # one shared array, not copies
-    assert not field_a.xdata.flags.writeable
+    # one shared cached array underneath
+    assert (field_a._compute_coordinates("X1 AXIS", 20)
+            is field_b._compute_coordinates("X1 AXIS", 20))
+    # the public property hands out a writable copy, so in-place edits
+    # cannot corrupt the shared grid
+    xdata = field_a.xdata
+    assert xdata.flags.writeable
+    xdata *= 2.0
+    np.testing.assert_array_equal(field_a.xdata, xdata / 2.0)
 
     cropped = field_a.crop(x_range=(0.0, 0.5))
     assert len(cropped.xdata) == 10

@@ -227,7 +227,7 @@ class TrackCollection:
         """The shared read-only file handle, (re)opened as needed."""
         with self._file_lock:
             stat = os.stat(self.file_path)
-            stat_key = (stat.st_mtime_ns, stat.st_size)
+            stat_key = (stat.st_mtime_ns, stat.st_size, stat.st_ino)
             if (
                 self._file is None
                 or not self._file
@@ -296,7 +296,17 @@ class TrackCollection:
         """Array of all track IDs in this collection (format: 'rank-tag')."""
         if self._track_ids is None:
             with self._file_lock:
-                ids = list(self.handle().keys())
+                names = list(self.handle().keys())
+            ids = []
+            for name in names:
+                rank, _, tag = name.partition("-")
+                if rank.isdigit() and tag.isdigit():
+                    ids.append(name)
+                else:
+                    logger.warning(
+                        f"Ignoring group '{name}' in {self.file_path}: "
+                        f"not a rank-tag track."
+                    )
             # Sort by (MPI rank, tag) numerically
             ids.sort(key=lambda x: tuple(map(int, x.split("-"))))
             self._track_ids = np.array(ids)

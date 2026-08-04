@@ -403,7 +403,7 @@ def fft_power_1d_slices(
     k = np.fft.rfftfreq(n, d=L / n) * 2 * np.pi
 
     fft_data = np.fft.rfft(data, axis=axis)
-    power = np.abs(fft_data) ** 2 / n
+    power = np.abs(fft_data) ** 2 * (L / n**2)
 
     # Double interior bins to account for negative-frequency conjugate pairs.
     # DC (index 0) is unique. For even n the Nyquist bin (last index) is also
@@ -504,6 +504,10 @@ class Data(BaseProperties):
     # For derived object plot titles
     _BINOP_SYMBOL = {"add": "+", "sub": "-", "mul": "*", "truediv": "/", "pow": "^"}
 
+    # defaults for instances restored from pickles that predate these fields
+    _data_chunks = False
+    _label_name = None
+
     def __init__(
         self,
         file_path: str,
@@ -514,6 +518,7 @@ class Data(BaseProperties):
         lazy: bool,
     ):
         super().__init__(file_path, name, timestep, time, lazy)
+        self._label_name = name
         self._time_ndecimals = time_ndecimals
         self._plot_title = rf"{name} at time {round(time, self._time_ndecimals)} $\omega_{{ci}}^{{-1}}$"
         self._data_shape = None
@@ -702,20 +707,28 @@ class Data(BaseProperties):
         else:
             return loader()
 
+    def _coords_for(self, axis_name: str, axis_index: int):
+        coords = self._compute_coordinates(
+            axis_name, self._get_data_shape()[axis_index]
+        )
+        if isinstance(coords, np.ndarray) and not coords.flags.writeable:
+            coords = coords.copy()  # callers may modify their own copy
+        return coords
+
     @property
     def xdata(self) -> Union[np.ndarray, da.Array]:
         """Retrieve the x (i.e. X1) grid coordinates."""
-        return self._compute_coordinates("X1 AXIS", self._get_data_shape()[0])
+        return self._coords_for("X1 AXIS", 0)
 
     @property
     def ydata(self) -> Union[np.ndarray, da.Array]:
         """Retrieve the y (i.e. X2) grid coordinates."""
-        return self._compute_coordinates("X2 AXIS", self._get_data_shape()[1])
+        return self._coords_for("X2 AXIS", 1)
 
     @property
     def zdata(self) -> Union[np.ndarray, da.Array]:
         """Retrieve the z (i.e. X3) grid coordinates."""
-        return self._compute_coordinates("X3 AXIS", self._get_data_shape()[2])
+        return self._coords_for("X3 AXIS", 2)
 
     @property
     def xlimdata(self) -> Union[np.ndarray, da.Array]:
@@ -836,6 +849,7 @@ class Data(BaseProperties):
 
         inst._plot_title = self._plot_title.replace(self.name, new_name)
         inst._plot_title = Data._trim_subtype(inst._plot_title)
+        inst._label_name = self._label_name
 
         return inst
 
@@ -907,6 +921,17 @@ class Data(BaseProperties):
             for other in data_operands[1:]:
                 ref._check_compatibility(other)
 
+        # out= writes into the caller's arrays, and numpy expects them
+        # returned as-is, not wrapped. A Data target would call this method
+        # again forever, so it is rejected.
+        out = kwargs.get("out")
+        if out is not None:
+            if any(isinstance(target, Data) for target in out):
+                raise TypeError(
+                    "out= targets must be plain arrays, not Data objects."
+                )
+            return ufunc(*raw_inputs, **kwargs)
+
         # Execute the ufunc on the underlying arrays
         result_array = ufunc(*raw_inputs, **kwargs)
 
@@ -963,7 +988,14 @@ class Data(BaseProperties):
         if num_dimensions < 1:
             raise ValueError("Data must have at least 1 dimension.")
 
+        if num_dimensions == 1 and direction != "x":
+            raise ValueError(
+                f"Cannot average along '{direction}' for 1D data. Use 'x'."
+            )
+
         data = self._materialize(self.data)
+        if data.dtype == np.bool_:
+            data = data.astype(np.float64)
 
         # Determine which axis corresponds to the direction and compute mean/std
         if num_dimensions == 1:
@@ -1050,8 +1082,8 @@ class Data(BaseProperties):
                     f"Invalid crop range {frac_range} for {axis_name}; "
                     "expected 0 <= low < high <= 1."
                 )
-            i0 = int(round(lo_frac * size))
-            i1 = max(int(round(hi_frac * size)), i0 + 1)
+            i0 = min(int(round(lo_frac * size)), size - 1)
+            i1 = min(max(int(round(hi_frac * size)), i0 + 1), size)
             index_slices.append(slice(i0, i1))
 
             limits = self._materialize(self._get_coordinate_limits(axis_name))
@@ -1152,9 +1184,13 @@ class Data(BaseProperties):
 
         k, power = self.fft_power()
 
-        # Filter out zero/negative values for log plot
+        # Filter out zero/negative values for log plot. The first bin
+        # holds the k = 0 term, the squared mean of the data, which would
+        # dwarf everything else, so it is excluded too.
         if loglog:
             valid = (k > 0) & (power > 0)
+            if len(valid):
+                valid[0] = False
             k_plot = k[valid]
             power_plot = power[valid]
             line = ax.loglog(k_plot, power_plot, **kwargs)[0]
@@ -1462,7 +1498,9 @@ class Data(BaseProperties):
                 **kwargs,
             )
             ax.set_title(title if title else self._plot_title)
-            xlabel_default, ylabel_default = self._axis_labels(self.name)
+            xlabel_default, ylabel_default = self._axis_labels(
+                self._label_name or self.name
+            )
             ax.set_xlabel(xlabel if xlabel else xlabel_default)
             ax.set_ylabel(ylabel if ylabel else ylabel_default)
             ax.set_xlim(xlim if xlim else xlimdata)
@@ -1503,6 +1541,9 @@ class Data(BaseProperties):
 
             initial_slice = 0
             initial_data_slice = self._read_2d_slice(slice_axis, initial_slice)
+            user_clim = any(
+                key in kwargs for key in ("vmin", "vmax", "norm")
+            )
             # imshow instead of pcolormesh: the grid is uniform, and swapping
             # the image data per slider tick is far cheaper than re-rendering
             # a quad mesh
@@ -1559,8 +1600,12 @@ class Data(BaseProperties):
                 ax.set_title(title if title else f"{self._plot_title}{position_str}")
                 mesh.set_data(data_slice.T)
                 # Rescale color limits to the new slice's data range so the
-                # colorbar reflects what is being shown.
-                mesh.set_clim(float(data_slice.min()), float(data_slice.max()))
+                # colorbar reflects what is being shown, unless the caller
+                # fixed the limits.
+                if not user_clim:
+                    mesh.set_clim(
+                        float(data_slice.min()), float(data_slice.max())
+                    )
                 if draw_marker is not None:
                     draw_marker(slice_index)
                 fig.canvas.draw_idle()
