@@ -143,7 +143,11 @@ def plot_frame(ax, data_obj, colormap, vmin, vmax):
 
     ndim = data.ndim
     orig_shape = data.shape
-    if ndim == 1 or (ndim == 2 and max(data.shape) <= MAX_W):
+    if ndim == 1:
+        vecho(f"    Data {orig_shape}: 1D line plot")
+        data_obj.plot(ax=ax)
+        return
+    if ndim == 2 and max(data.shape) <= MAX_W:
         vecho(f"    Data {orig_shape}: no downsampling needed")
         data_obj.plot(ax=ax, colormap=colormap, vmin=vmin, vmax=vmax)
         return
@@ -331,8 +335,22 @@ def plot_data_series(
     pmax: float = 98.0,
 ) -> None:
     """Plot a data series across all timesteps and optionally create video."""
-    os.makedirs(plot_dir, exist_ok=True)
     timesteps = dpy.timesteps()
+    for ts_num in timesteps:
+        try:
+            probe = get_data(dpy.timestep(ts_num))
+        except (AttributeError, ValueError, OSError):
+            continue
+        if len(probe._get_data_shape()) == 3:
+            typer.echo(
+                f"  Skipping {label}: 3D data is not supported by dplot. "
+                f"Use the plot() method for interactive 3D slices.",
+                err=True,
+            )
+            return
+        break
+
+    os.makedirs(plot_dir, exist_ok=True)
 
     # Compute global color limits if not provided
     if vmin is None or vmax is None:
@@ -500,6 +518,16 @@ def run(
     global _VERBOSE
     _VERBOSE = verbose
 
+    if not field_type.isupper():
+        field_type = field_type.capitalize()
+    if field_type not in ("Total", "External", "Self"):
+        typer.echo(
+            f"Error: --type must be Total, External, or Self "
+            f"(got '{field_type}').",
+            err=True,
+        )
+        raise typer.Exit(1)
+
     parallel_axis = parallel_axis.lower()
     if parallel_axis not in _B_AXES:
         typer.echo(
@@ -529,6 +557,12 @@ def run(
         )
         raise typer.Exit(1)
 
+    if len(dpy.timesteps()) == 0:
+        typer.echo(
+            f"Error: no field or phase output found under '{output}'.", err=True
+        )
+        raise typer.Exit(1)
+
     first_ts = dpy.timestep(dpy.timesteps()[0])
 
     # Expand --all-fields / --all-phases
@@ -551,6 +585,17 @@ def run(
 
     # Plot fields
     if fields:
+        available = sorted(first_ts._fields_dict.get(field_type, {}).keys())
+        for field_name in fields:
+            if field_name.lower() not in _B_DERIVED_NAMES and not hasattr(
+                first_ts.fields, field_name
+            ) and field_name not in available:
+                typer.echo(
+                    f"Error: unknown field '{field_name}' for type "
+                    f"{field_type}. Available: {', '.join(available)}",
+                    err=True,
+                )
+                raise typer.Exit(1)
         for field_name in fields:
             canonical = field_name.lower()
             is_b_derived = canonical in _B_DERIVED_NAMES
@@ -598,6 +643,20 @@ def run(
         target_species = species if species else available_species
 
         for phase_name in phases:
+            known = sorted(
+                {
+                    name
+                    for names in first_ts._phases_dict.values()
+                    for name in names
+                }
+            )
+            if phase_name not in known:
+                typer.echo(
+                    f"Error: unknown phase '{phase_name}'. "
+                    f"Available: {', '.join(known)}",
+                    err=True,
+                )
+                raise typer.Exit(1)
             for sp in target_species:
                 label = f"{phase_name}_Sp{sp:02d}"
                 typer.echo(f"Phase: {phase_name} (species={sp})")
