@@ -92,24 +92,29 @@ Represents raw particle data. Obtained via
 | `lazy` | `bool` | Whether lazy loading is enabled |
 | `species` | `int` | Species number |
 
-### Properties
+### Properties and Methods
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `dict` | `dict` | Dictionary of all raw data arrays |
+| Name | Description |
+|------|-------------|
+| `dict` | Dictionary of all raw data arrays (reads every dataset) |
+| `keys()` | Dataset names without reading any data |
+| `raw[key]` | Read one dataset, e.g. `raw["ene"]` |
+| `key in raw` | Whether a dataset exists |
+| `load(keys=None, workers=None)` | Read several datasets at once. Faster than `dict` or a loop over keys because the reads run in parallel worker processes (eager only) |
 
 ### Example
 
 ```python
 raw = dpy.timestep(1).raw_files.raw(species=1)
 
-data_dict = raw.dict
-print(data_dict.keys())  # e.g., ['x1', 'x2', 'x3', 'p1', 'p2', 'p3']
+print(raw.keys())  # e.g., ['x1', 'x2', 'x3', 'p1', 'p2', 'p3']
 
-# Access specific quantities. In dHybridR, p1/p2/p3 are proper velocity
-# components (gamma*v), not 3-velocity or momentum.
-x_positions = data_dict['x1']
-proper_velocity_x = data_dict['p1']
+# One dataset without reading the rest. In dHybridR, p1/p2/p3 are proper
+# velocity components (gamma*v), not 3-velocity or momentum.
+energies = raw["ene"]
+
+# Several datasets, read by parallel worker processes
+positions = raw.load(keys=["x1", "x2", "x3"])
 ```
 
 ---

@@ -406,6 +406,84 @@ class DHybridrpy:
         """Retrieve an array of simulation times corresponding to each raw timestep."""
         return np.array([self._timestep_times[ts] for ts in self.raw_timesteps()])
 
+    def _timeseries_paths(self, kind: str, names: list, key, timesteps) -> list:
+        """File paths per timestep, one inner list per requested name."""
+        if timesteps is None:
+            timesteps = self.timesteps()
+        grouped = []
+        for ts in timesteps:
+            container = getattr(self.timestep(int(ts)), kind)
+            grouped.append(
+                [getattr(container, name)(key).file_path for name in names]
+            )
+        return grouped
+
+    def _timeseries(self, kind: str, name, key, timesteps, apply, workers):
+        from . import _parallel
+
+        names = [name] if isinstance(name, str) else list(name)
+        grouped = self._timeseries_paths(kind, names, key, timesteps)
+        if not grouped:
+            raise ValueError("No timesteps selected.")
+        if apply is None:
+            if len(names) != 1:
+                raise ValueError(
+                    "Reading several quantities at once needs `apply`; "
+                    "call once per name to load them whole."
+                )
+            return _parallel.gather_data([g[0] for g in grouped], workers)
+        pool = _parallel.get_pool(workers)
+        return list(
+            pool.map(_parallel.map_data, grouped, [apply] * len(grouped))
+        )
+
+    def field_timeseries(
+        self,
+        name,
+        type: str = "Total",
+        timesteps=None,
+        apply=None,
+        workers: int = None,
+    ):
+        """One field across many timesteps, read by parallel worker processes.
+
+        h5py cannot overlap reads across threads, so files are read by a
+        pool of worker processes instead.
+
+        Args:
+            name: Field name, e.g. "Bx", or a list of names when `apply`
+                combines several fields.
+            type: Field type ("Total", "External", "Self").
+            timesteps: Iterable of timesteps; all field/phase timesteps
+                when None.
+            apply: Function applied to each timestep's field(s) inside the
+                workers; only its results travel back, so this scales to
+                runs whose full data would not fit in memory. Must be
+                importable (a module-level function such as np.mean, not a
+                lambda). Receives one array per name, in order.
+            workers: Worker process count (default min(8, cpu count)).
+
+        Returns:
+            Without `apply`: array of shape (num_timesteps, *grid). The
+            full selection is held in memory, so pass a timesteps subset
+            for very large runs. With `apply`: a list of its results in
+            timestep order.
+        """
+        return self._timeseries("fields", name, type, timesteps, apply, workers)
+
+    def phase_timeseries(
+        self,
+        name,
+        species=1,
+        timesteps=None,
+        apply=None,
+        workers: int = None,
+    ):
+        """One phase quantity across many timesteps; see field_timeseries."""
+        return self._timeseries(
+            "phases", name, species, timesteps, apply, workers
+        )
+
     def _discover_tracks(self) -> None:
         """Discover track files in the output folder."""
 

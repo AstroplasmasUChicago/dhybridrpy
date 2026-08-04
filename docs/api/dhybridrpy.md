@@ -36,6 +36,51 @@ class DHybridrpy(
 
 ## Methods
 
+### `field_timeseries(name, type="Total", timesteps=None, apply=None, workers=None)`
+
+One field across many timesteps. Prefer this over looping. Code like
+
+```python
+for ts in dpy.timesteps():
+    data = dpy.timestep(ts).fields.Bx().data   # slow: one file at a time
+```
+
+reads files one at a time, while `field_timeseries` reads them with a
+pool of parallel worker processes.
+
+Without `apply`, returns an array of shape `(num_timesteps, *grid)`;
+memory is the full selection, so pass a `timesteps` subset for very
+large runs:
+
+```python
+B_x = dpy.field_timeseries("Bx", timesteps=dpy.timesteps()[-20:])
+```
+
+With `apply`, the function runs on each timestep's field(s) inside the
+workers and only its results travel back. This scales to runs whose
+full data would not fit in memory. `apply` must be importable (a
+module-level function such as `np.mean`, not a lambda). `name` may be a
+list, in which case `apply` receives one array per name:
+
+```python
+mean_Bx = dpy.field_timeseries("Bx", apply=np.mean)
+
+def mean_bperp(bx, by):
+    return np.sqrt(bx**2 + by**2).mean()
+
+bperp = dpy.field_timeseries(["Bx", "By"], apply=mean_bperp)
+```
+
+`phase_timeseries(name, species=1, ...)` is the phase-quantity
+counterpart.
+
+Notes: the worker pool starts on first use and persists. Workers are
+spawned processes, so in a script the call must run under an
+`if __name__ == "__main__":` guard (notebooks and interactive sessions
+need no guard; scripts piped through stdin cannot spawn workers at all).
+
+---
+
 ### `timestep(ts: int) -> Timestep`
 
 Access field, phase, and raw file information at a given timestep.

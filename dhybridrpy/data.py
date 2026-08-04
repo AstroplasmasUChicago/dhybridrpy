@@ -1599,6 +1599,62 @@ class Raw(BaseProperties):
         super().__init__(file_path, name, timestep, time, lazy)
         self.species = species
 
+    def keys(self) -> list:
+        """Dataset names in the raw file, without reading any data."""
+        with open_h5(self.file_path) as file:
+            return list(file.keys())
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.keys()
+
+    def __getitem__(self, key: str) -> Union[np.ndarray, da.Array]:
+        """Read a single dataset, e.g. raw["ene"]."""
+        with open_h5(self.file_path) as file:
+            if key not in file:
+                raise KeyError(
+                    f"Dataset '{key}' not found in {self.file_path}; "
+                    f"available: {sorted(file.keys())}"
+                )
+            if not self.lazy:
+                return file[key][:]
+            shape = file[key].shape
+            dtype = file[key].dtype
+
+        def loader(k=key):
+            with open_h5(self.file_path) as f:
+                return f[k][:]
+
+        return da.from_delayed(delayed(loader)(), shape=shape, dtype=dtype)
+
+    def load(self, keys=None, workers: int = None) -> dict:
+        """Read several datasets at once using the process worker pool.
+
+        h5py cannot overlap reads across threads, so the datasets are read
+        by separate processes. Args: keys (all datasets when None) and
+        workers (pool size). Eager only; for lazy access use `dict` or
+        indexing.
+        """
+        from . import _parallel
+
+        if self.lazy:
+            raise ValueError("load() reads eagerly; use dict or [] when lazy.")
+        available = self.keys()
+        if keys is None:
+            keys = available
+        else:
+            missing = [key for key in keys if key not in available]
+            if missing:
+                raise KeyError(
+                    f"Dataset(s) {missing} not found in {self.file_path}; "
+                    f"available: {sorted(available)}"
+                )
+        pool = _parallel.get_pool(workers)
+        futures = {
+            key: pool.submit(_parallel.read_dataset, self.file_path, key)
+            for key in keys
+        }
+        return {key: future.result() for key, future in futures.items()}
+
     @property
     def dict(self) -> dict:
         """Retrieve a dictionary of the raw file's keys and values.

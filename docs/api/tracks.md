@@ -124,7 +124,7 @@ for track in collection:
 
 #### `load_dataset(key: str, track_ids=None) -> dict`
 
-Load one dataset for many tracks in a single pass over the file — much
+Load one dataset for many tracks in a single pass over the file. Much
 faster than reading track by track.
 
 **Parameters:**
@@ -142,8 +142,8 @@ energies = collection.load_dataset('ene')
 #### `close()`
 
 Reads share one open file handle (opened on first use, reopened if the
-file is replaced). `close()` releases it — useful before deleting or
-re-creating the file; reads reopen it automatically. `TrackCollection`
+file is replaced). `close()` releases it, which is needed before
+deleting or re-creating the file; reads reopen it automatically. `TrackCollection`
 also works as a context manager.
 
 ## DHybridrpy Track Methods
