@@ -108,7 +108,8 @@ def test_replaced_file_reopens(track_file, tmp_path):
     new_data = write_track_file(tmp, {"0-5": 8, "0-30": 12, "1-2": 12, "2-7": 5},
                                 seed=9)
     os.replace(tmp, fp)
-    os.utime(fp)
+    stat = os.stat(fp)
+    os.utime(fp, ns=(stat.st_atime_ns, stat.st_mtime_ns + 10**9))
     after = coll["0-5"].x1
     assert not np.array_equal(before, after)
     np.testing.assert_array_equal(after, new_data["0-5"]["x1"])
@@ -142,7 +143,8 @@ def test_replaced_file_refreshes_track_ids(track_file, tmp_path):
     tmp = tmp_path / "replacement.h5"
     new_data = write_track_file(tmp, {"0-5": 8, "9-9": 6}, seed=3)
     os.replace(tmp, fp)
-    os.utime(fp)
+    stat = os.stat(fp)
+    os.utime(fp, ns=(stat.st_atime_ns, stat.st_mtime_ns + 10**9))
     coll.handle()  # reopen invalidates the cached ids
     assert list(coll.track_ids) == ["0-5", "9-9"]
     np.testing.assert_array_equal(coll["9-9"].x1, new_data["9-9"]["x1"])

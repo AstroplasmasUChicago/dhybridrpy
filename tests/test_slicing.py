@@ -75,7 +75,8 @@ def test_replaced_file_gets_fresh_handle(tmp_path):
     tmp = tmp_path / "replacement.h5"
     cube2 = write_cube(tmp, rng_seed=1)
     os.replace(tmp, fp)
-    os.utime(fp)  # ensure a new mtime even on coarse filesystem clocks
+    stat = os.stat(fp)
+    os.utime(fp, ns=(stat.st_atime_ns, stat.st_mtime_ns + 10**9))  # ensure a new mtime even on coarse filesystem clocks
     after = field._read_2d_slice("z", 0)
     assert not np.array_equal(before, after)
     np.testing.assert_array_equal(after, cube2[0, :, :].T)
