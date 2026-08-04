@@ -118,6 +118,38 @@ def test_evicted_dataset_remains_usable(tmp_path, monkeypatch):
     np.testing.assert_array_equal(ds1[0, 0, :], cube1[0, 0, :])
 
 
+def test_arrow_keys_step_slider(tmp_path):
+    import matplotlib
+
+    matplotlib.use("Agg")
+    from matplotlib.backend_bases import KeyEvent
+
+    fp = tmp_path / "Bfld_00000100.h5"
+    write_cube(fp)
+    field = make_field(fp)
+    ax, mesh = field.plot(slice_axis="x")
+    fig = ax.figure
+    slider = fig._dhybridrpy_widgets[-1]
+
+    def press(key):
+        event = KeyEvent(name="key_press_event", canvas=fig.canvas, key=key)
+        fig.canvas.callbacks.process("key_press_event", event)
+
+    assert slider.val == 0
+    press("left")
+    assert slider.val == 0  # clamped at the low end
+    press("right")
+    press("right")
+    assert slider.val == 2
+    for _ in range(50):
+        press("right")
+    assert slider.val == 31  # clamped at n-1 for the 32-wide x axis
+
+    import matplotlib.pyplot as plt
+
+    plt.close(fig)
+
+
 def test_lazy_derived_slice_computes_one_plane(tmp_path):
     fp = tmp_path / "Bfld_00000100.h5"
     cube = write_cube(fp)

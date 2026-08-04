@@ -10,6 +10,7 @@ import operator
 from matplotlib.widgets import Slider
 
 from matplotlib.axes import Axes
+from matplotlib.backend_bases import key_press_handler
 from matplotlib.collections import QuadMesh
 from matplotlib.lines import Line2D
 from typing import Tuple, Union, Optional, Literal
@@ -1228,6 +1229,7 @@ class Data(BaseProperties):
             show_colorbar: Whether to display the colorbar.
             colorbar_label: Label for the colorbar.
             slice_axis: Slice axis for 3D data. Must be "x", "y", or "z".
+                The left/right arrow keys step the slice by one.
             **kwargs: Additional keyword arguments for the plotting functions.
 
         Returns:
@@ -1355,6 +1357,25 @@ class Data(BaseProperties):
                 fig.canvas.draw_idle()
 
             slider.on_changed(update)
+
+            def step_slice(event) -> None:
+                if event.key == "right":
+                    slider.set_val(min(int(slider.val) + 1, n_along - 1))
+                elif event.key == "left":
+                    slider.set_val(max(int(slider.val) - 1, 0))
+                else:
+                    # keep matplotlib's other default shortcuts working
+                    key_press_handler(
+                        event, fig.canvas, getattr(fig.canvas, "toolbar", None)
+                    )
+
+            # matplotlib's default handler binds left/right to view history;
+            # replace it so the arrow keys step through slices instead
+            manager = fig.canvas.manager
+            if manager is not None:
+                fig.canvas.mpl_disconnect(manager.key_press_handler_id)
+            fig.canvas.mpl_connect("key_press_event", step_slice)
+
             # Keep a strong reference to the slider on the Figure so it
             # isn't garbage collected after this function returns (which
             # would silently break the widget on some matplotlib backends).
