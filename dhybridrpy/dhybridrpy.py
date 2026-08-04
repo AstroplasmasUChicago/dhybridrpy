@@ -146,8 +146,10 @@ class DHybridrpy:
     def _decide_time_mode(self) -> None:
         """Decide whether times can be computed as timestep*dt instead of read
         from every file, which costs one file open per timestep. The earliest
-        and latest output files are checked first; if either TIME attribute
-        disagrees with timestep*dt, times are read from files as before.
+        and latest output files are checked first; if their TIME attributes
+        disagree with timestep*dt, times are read from files as before. Files
+        that disagree with each other about dt raise an error, since a run
+        with fixed dt cannot produce them.
         """
         self._derive_times = False
         if self.adaptive_dt:
@@ -168,6 +170,7 @@ class DHybridrpy:
             return
 
         nonzero = [c for c in candidates if c[0] != 0] or candidates
+        samples = []
         for timestep, filepath in sorted({min(nonzero), max(nonzero)}):
             try:
                 with h5py.File(filepath, "r") as f:
@@ -178,6 +181,21 @@ class DHybridrpy:
                     f"reading times from files instead."
                 )
                 return
+            samples.append((timestep, filepath, file_time))
+
+        implied = [(t / ts, fp) for ts, fp, t in samples if ts != 0]
+        if len(implied) == 2 and not math.isclose(
+            implied[0][0], implied[1][0], rel_tol=1e-5
+        ):
+            raise ValueError(
+                f"Output folder contains files written with different time "
+                f"steps: {implied[0][1]} implies dt={implied[0][0]:.6g} but "
+                f"{implied[1][1]} implies dt={implied[1][0]:.6g}. A run with "
+                f"fixed dt cannot produce this; check that the output folder "
+                f"holds a single run's output."
+            )
+
+        for timestep, filepath, file_time in samples:
             derived = timestep * self.dt
             if not math.isclose(derived, file_time, rel_tol=1e-5, abs_tol=1e-9):
                 logger.warning(

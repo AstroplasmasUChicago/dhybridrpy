@@ -32,14 +32,14 @@ def write_field(dirpath, prefix, timestep, time_value):
         f.create_dataset("DATA", data=np.zeros((4, 8), dtype=np.float32))
 
 
-def make_tree(tmp_path, time_offset=0.0, extra_time_lines=""):
+def make_tree(tmp_path, time_scale=1.0, extra_time_lines=""):
     inp = tmp_path / "input"
     write_input(inp, extra_time_lines)
     bx = tmp_path / "Output" / "Fields" / "Magnetic" / "Total" / "x"
     phase = tmp_path / "Output" / "Phase" / "x2x1" / "Sp01"
     for ts in (0, 10, 20):
-        write_field(bx, "Bfld", ts, ts * DT + time_offset)
-        write_field(phase, "x2x1_sp01", ts, ts * DT + time_offset)
+        write_field(bx, "Bfld", ts, ts * DT * time_scale)
+        write_field(phase, "x2x1_sp01", ts, ts * DT * time_scale)
     return str(inp), str(tmp_path / "Output")
 
 
@@ -67,42 +67,39 @@ def test_derived_times_spot_check_opens_only(tmp_path, monkeypatch):
     assert dp.timestep(10).phases.x2x1(species=1).time == 5.0
 
 
-def test_fallback_when_time_mismatches(tmp_path, monkeypatch, caplog):
-    inp, out = make_tree(tmp_path, time_offset=5.0)  # e.g. foreign producer with t0
+def test_fallback_when_deck_dt_mismatches(tmp_path, monkeypatch, caplog):
+    # files agree with each other on dt, but not with the deck (stale input file)
+    inp, out = make_tree(tmp_path, time_scale=2.0)
     counts = install_open_counter(monkeypatch)
     dp = DHybridrpy(inp, out)
     assert not dp._derive_times
-    assert counts["n"] == 1 + 3  # first spot check fails + one read per timestep
-    np.testing.assert_allclose(dp.times(), [10.0, 15.0])
+    assert counts["n"] == 2 + 3  # both spot checks + one read per timestep
+    np.testing.assert_allclose(dp.times(), [10.0, 20.0])
     assert any("does not match" in r.message for r in caplog.records)
 
 
-def test_fallback_when_late_times_drift(tmp_path, monkeypatch):
-    """Early files match timestep*dt but late ones don't (dt changed mid-run)."""
+def test_error_when_files_imply_different_dt(tmp_path):
+    """A fixed-dt run cannot write files whose TIMEs imply two dt values."""
     inp = tmp_path / "input"
     write_input(inp)
     bx = tmp_path / "Output" / "Fields" / "Magnetic" / "Total" / "x"
     write_field(bx, "Bfld", 10, 10 * DT)
     write_field(bx, "Bfld", 20, 20 * DT + 3.0)
-    install_open_counter(monkeypatch)
-    dp = DHybridrpy(str(inp), str(tmp_path / "Output"))
-    assert not dp._derive_times
-    np.testing.assert_allclose(dp.times(), [5.0, 13.0])
+    with pytest.raises(ValueError, match="different time steps"):
+        DHybridrpy(str(inp), str(tmp_path / "Output"))
 
 
-def test_fallback_when_drift_is_in_another_directory(tmp_path, monkeypatch):
-    """The consistent and drifted files live in different folders; the check
-    must compare across the whole tree, not just the first folder walked."""
+def test_error_when_inconsistent_dt_spans_directories(tmp_path):
+    """The consistency check must span the whole tree, not just the first
+    folder walked."""
     inp = tmp_path / "input"
     write_input(inp)
     bx = tmp_path / "Output" / "Fields" / "Magnetic" / "Total" / "x"
     phase = tmp_path / "Output" / "Phase" / "x2x1" / "Sp01"
     write_field(bx, "Bfld", 10, 10 * DT)
     write_field(phase, "x2x1_sp01", 50, 50 * DT + 3.0)
-    install_open_counter(monkeypatch)
-    dp = DHybridrpy(str(inp), str(tmp_path / "Output"))
-    assert not dp._derive_times
-    np.testing.assert_allclose(dp.times(), [5.0, 28.0])
+    with pytest.raises(ValueError, match="different time steps"):
+        DHybridrpy(str(inp), str(tmp_path / "Output"))
 
 
 def test_adaptive_dt_reads_files(tmp_path, monkeypatch):
