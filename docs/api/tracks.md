@@ -112,6 +112,40 @@ Get a track by its ID.
 track = dpy.track('0-1465')
 ```
 
+#### `__len__()` / `__iter__()`
+
+The number of tracks, and iteration over all `Track` objects in
+rank-tag order:
+
+```python
+for track in collection:
+    print(track.track_id, track.ene.max())
+```
+
+#### `load_dataset(key: str, track_ids=None) -> dict`
+
+Load one dataset for many tracks in a single pass over the file — much
+faster than reading track by track.
+
+**Parameters:**
+
+- `key` (`str`): Dataset name, e.g. `'x1'` or `'ene'`
+- `track_ids`: Iterable of track IDs; all tracks when `None`
+
+**Returns:** `{track_id: array}`. Tracks may have different lengths, so
+values are per track rather than stacked.
+
+```python
+energies = collection.load_dataset('ene')
+```
+
+#### `close()`
+
+Reads share one open file handle (opened on first use, reopened if the
+file is replaced). `close()` releases it — useful before deleting or
+re-creating the file; reads reopen it automatically. `TrackCollection`
+also works as a context manager.
+
 ## DHybridrpy Track Methods
 
 Methods on the main `DHybridrpy` class for accessing tracks.
