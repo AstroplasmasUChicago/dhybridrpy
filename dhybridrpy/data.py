@@ -13,7 +13,6 @@ from matplotlib.widgets import Slider
 
 from matplotlib.axes import Axes
 from matplotlib.backend_bases import key_press_handler
-from matplotlib.collections import QuadMesh
 from matplotlib.image import AxesImage
 from matplotlib.lines import Line2D
 from typing import Tuple, Union, Optional, Literal
@@ -40,6 +39,9 @@ def open_h5(file_path: str, **kwargs) -> h5py.File:
 # so reopening per slice re-inflates every touched chunk; a kept dataset
 # with a cache sized to hold one slice's chunks makes neighboring slices
 # nearly free.
+_LAZY_SLAB_BYTES = 64 * 1024**2  # dask chunk target for lazy arrays
+
+_coordinate_cache = {}  # {(low, high, size): read-only coordinate array}
 _slice_handles = {}  # {(path, mtime_ns, size): (h5py.File, h5py.Dataset)}
 _slice_handles_lock = threading.Lock()
 _slice_handles_pid = os.getpid()
@@ -516,6 +518,8 @@ class Data(BaseProperties):
         self._plot_title = rf"{name} at time {round(time, self._time_ndecimals)} $\omega_{{ci}}^{{-1}}$"
         self._data_shape = None
         self._data_dtype = None
+        # False means not read yet; None means the dataset is contiguous
+        self._data_chunks = False
 
     def _load_metadata(self) -> None:
         """Read shape, dtype, and all axis limits in a single file open."""
@@ -526,6 +530,8 @@ class Data(BaseProperties):
                 self._data_shape = dataset.shape[::-1]
             if self._data_dtype is None:
                 self._data_dtype = dataset.dtype
+            if self._data_chunks is False:
+                self._data_chunks = dataset.chunks
             axis_group = file.get("AXIS")
             if axis_group is not None:
                 for axis_name in axis_group:
@@ -546,8 +552,19 @@ class Data(BaseProperties):
         if key not in self._data_dict:
             axis_limits = self._get_coordinate_limits(axis_name)
             delta = (axis_limits[1] - axis_limits[0]) / size
-            grid = da.arange(size, chunks="auto") if self.lazy else np.arange(size)
-            self._data_dict[key] = delta * grid + (delta / 2) + axis_limits[0]
+            if self.lazy:
+                grid = da.arange(size, chunks="auto")
+                self._data_dict[key] = delta * grid + (delta / 2) + axis_limits[0]
+                return self._data_dict[key]
+            # Every field and timestep of a run shares the same grid, so the
+            # coordinate arrays are shared too instead of stored per object.
+            cache_key = (float(axis_limits[0]), float(axis_limits[1]), int(size))
+            coords = _coordinate_cache.get(cache_key)
+            if coords is None:
+                coords = delta * np.arange(size) + (delta / 2) + axis_limits[0]
+                coords.setflags(write=False)
+                _coordinate_cache[cache_key] = coords
+            self._data_dict[key] = coords
         return self._data_dict[key]
 
     def _read_2d_slice(
@@ -590,6 +607,25 @@ class Data(BaseProperties):
             return arr.compute()
         return arr
 
+    def _lazy_slab_edges(self, shape, dtype):
+        """Slab boundaries along the file's first axis, so lazy arrays get
+        several dask chunks and slicing them reads only what it needs.
+        Returns None when one chunk suffices."""
+        if self._data_chunks is False:
+            self._load_metadata()
+        chunks = self._data_chunks if self._data_chunks else None
+        # the file's first axis is the logical last axis after the transpose
+        n = shape[-1]
+        step = chunks[0] if chunks else 1
+        row_bytes = (
+            int(np.prod(shape[:-1])) * np.dtype(dtype).itemsize
+        )
+        rows = max(1, _LAZY_SLAB_BYTES // max(row_bytes, 1))
+        rows = max(step, (rows // step) * step)
+        if n <= rows:
+            return None
+        return [(a, min(a + rows, n)) for a in range(0, n, rows)]
+
     def _parallel_read_worthwhile(self) -> bool:
         """Whether to read this dataset with worker processes: it must be
         large enough to benefit and spawning workers must be safe here."""
@@ -631,12 +667,28 @@ class Data(BaseProperties):
                 return f["DATA"][:].T
 
         if self.lazy:
-            delayed_obj = delayed(loader)()
-            return da.from_delayed(
-                delayed_obj,
-                shape=self._get_data_shape(),
-                dtype=self._get_data_dtype(),
-            )
+            shape = self._get_data_shape()
+            dtype = self._get_data_dtype()
+            edges = self._lazy_slab_edges(shape, dtype)
+            if edges is None:
+                return da.from_delayed(
+                    delayed(loader)(), shape=shape, dtype=dtype
+                )
+            parts = []
+            for start, stop in edges:
+
+                def slab_loader(start=start, stop=stop):
+                    with open_h5(self.file_path) as f:
+                        return f["DATA"][start:stop].T
+
+                parts.append(
+                    da.from_delayed(
+                        delayed(slab_loader)(),
+                        shape=shape[:-1] + (stop - start,),
+                        dtype=dtype,
+                    )
+                )
+            return da.concatenate(parts, axis=-1)
         elif self._parallel_read_worthwhile():
             from . import _parallel
 
@@ -1338,7 +1390,7 @@ class Data(BaseProperties):
         slice_axis: Literal["x", "y", "z"] = "x",
         context_3d: bool = True,
         **kwargs,
-    ) -> Tuple[Axes, Union[Line2D, QuadMesh, AxesImage]]:
+    ) -> Tuple[Axes, Union[Line2D, AxesImage]]:
         """
         Plot 1D, 2D, or 3D data.
 
@@ -1359,8 +1411,8 @@ class Data(BaseProperties):
             **kwargs: Additional keyword arguments for the plotting functions.
 
         Returns:
-            Matplotlib Axes and plot object. For 3D data the slice is drawn
-            with imshow, so the plot object is an AxesImage.
+            Matplotlib Axes and plot object. 2D data and 3D slices are
+            drawn with imshow, so their plot object is an AxesImage.
         """
 
         num_dimensions = len(self._get_data_shape())
@@ -1397,10 +1449,18 @@ class Data(BaseProperties):
 
             return ax, line
         elif num_dimensions == 2:
-            ydata = self._materialize(self.ydata)
             ylimdata = self._materialize(self.ylimdata)
-            X, Y = np.meshgrid(xdata, ydata, indexing="ij")
-            mesh = ax.pcolormesh(X, Y, data, cmap=colormap, shading="auto", **kwargs)
+            # imshow instead of pcolormesh: the grid is uniform, and an image
+            # avoids building full coordinate meshes for large grids
+            kwargs.setdefault("origin", "lower")
+            kwargs.setdefault("interpolation", "nearest")
+            kwargs.setdefault("aspect", "auto")
+            mesh = ax.imshow(
+                data.T,
+                extent=(*xlimdata, *ylimdata),
+                cmap=colormap,
+                **kwargs,
+            )
             ax.set_title(title if title else self._plot_title)
             xlabel_default, ylabel_default = self._axis_labels(self.name)
             ax.set_xlabel(xlabel if xlabel else xlabel_default)

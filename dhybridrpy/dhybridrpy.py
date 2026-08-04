@@ -360,7 +360,7 @@ class DHybridrpy:
         timesteps = self.timesteps()
         if len(timesteps) == 0:
             raise ValueError("No timesteps available.")
-        closest_ts = min(timesteps, key=lambda x: abs(x - ts))
+        closest_ts = timesteps[np.argmin(np.abs(timesteps - ts))]
         if verbose:
             logger.info(
                 f"Requested timestep: {ts}. Closest available timestep: {closest_ts}."

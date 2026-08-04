@@ -215,7 +215,7 @@ def plot(
     slice_axis: Literal["x", "y", "z"] = "x",
     context_3d: bool = True,
     **kwargs
-) -> Tuple[Axes, Union[Line2D, QuadMesh, AxesImage]]
+) -> Tuple[Axes, Union[Line2D, AxesImage]]
 ```
 
 ### Parameters
@@ -241,7 +241,7 @@ def plot(
 ### Returns
 
 - `Axes`: The matplotlib Axes object (for 3D data, the slice panel)
-- `Line2D`, `QuadMesh`, or `AxesImage`: The plot object (3D slices are drawn with imshow)
+- `Line2D` or `AxesImage`: The plot object (2D data and 3D slices are drawn with imshow)
 
 ### Example
 
