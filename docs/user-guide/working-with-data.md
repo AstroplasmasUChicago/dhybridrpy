@@ -49,6 +49,25 @@ all_ts = dpy.timesteps()
 print(all_ts)  # e.g., array([1, 2, 3, 4, 5])
 ```
 
+### Get Simulation Times
+
+`times()` returns the simulation time of each field/phase timestep, in
+the same order as `timesteps()`:
+
+```python
+all_times = dpy.times()
+```
+
+### Raw Data Timesteps
+
+Raw particle data may be dumped at different intervals than fields and
+phases, so it has its own timestep and time arrays:
+
+```python
+raw_ts = dpy.raw_timesteps()
+raw_times = dpy.raw_times()
+```
+
 ## Field Data
 
 Fields represent electromagnetic quantities on the simulation grid.
@@ -150,6 +169,61 @@ Pxy = dpy.timestep(1).phases.Pxy(species=1)
 P = dpy.timestep(1).phases.P(species=1)
 ```
 
+## Reading Across Timesteps
+
+A common task is following one quantity through the whole run. Looping
+over timesteps works, but it reads the files one at a time:
+
+```python
+# Works, but slow: one file at a time
+max_Bx = []
+for ts in dpy.timesteps():
+    max_Bx.append(dpy.timestep(ts).fields.Bx().data.max())
+```
+
+Prefer `field_timeseries` and `phase_timeseries`, which read the files
+in parallel worker processes:
+
+```python
+import numpy as np
+
+# Reduce each timestep inside the workers; only the results come back
+max_Bx = dpy.field_timeseries("Bx", apply=np.max)
+
+# Phase counterpart, per species
+mean_Vx = dpy.phase_timeseries("Vx", species=1, apply=np.mean)
+```
+
+Without `apply`, the full selection is returned as one array of shape
+`(num_timesteps, *grid)` and held in memory, so pass a `timesteps`
+subset for very large runs:
+
+```python
+Bx_recent = dpy.field_timeseries("Bx", timesteps=dpy.timesteps()[-20:])
+```
+
+The `apply` function runs inside the workers, so only its results
+travel back. This scales to runs whose full data would not fit in
+memory. It must be a module-level function (such as `np.mean`), not a
+lambda. `name` may also be a list of names, in which case `apply`
+receives one array per name:
+
+```python
+def mean_bperp(bx, by):
+    return np.sqrt(bx**2 + by**2).mean()
+
+bperp = dpy.field_timeseries(["Bx", "By"], apply=mean_bperp)
+```
+
+Other arguments: `type` selects the field type (`field_timeseries`),
+`species` selects the species (`phase_timeseries`), and `workers` sets
+the pool size.
+
+!!! note
+    The workers are spawned processes. In a script, calls to these
+    methods must run under an `if __name__ == "__main__":` guard.
+    Notebooks and interactive sessions need no guard.
+
 ## Raw Particle Data
 
 Raw files contain particle-level data:
@@ -158,10 +232,42 @@ Raw files contain particle-level data:
 # Access raw data for species 1
 raw = dpy.timestep(1).raw_files.raw(species=1)
 
-# Get the data dictionary
+# List available datasets without reading any data
+print(raw.keys())  # e.g., ['ene', 'p1', 'p2', 'p3', 'x1', 'x2']
+
+# Check for a dataset
+if 'ene' in raw:
+    print("energies available")
+```
+
+### Reading Selected Datasets
+
+Index the raw object to read a single dataset, or use `load()` to read
+several at once with the worker pool:
+
+```python
+# Read one dataset
+x = raw['x1']
+
+# Read several datasets in parallel worker processes
+data = raw.load(['x1', 'x2', 'ene'])
+print(data['ene'])
+
+# Read everything in parallel
+data = raw.load()
+```
+
+### Reading Everything
+
+`raw.dict` reads the whole file into a dictionary in one pass:
+
+```python
 data_dict = raw.dict
 print(data_dict.keys())  # Available quantities
 ```
+
+Prefer `keys()`, indexing, or `load()` when you only need some of the
+datasets, since `dict` reads them all.
 
 ## Data Properties
 

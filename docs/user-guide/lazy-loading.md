@@ -93,16 +93,26 @@ for ts in dpy.timesteps():
     max_values.append(max_val)
 ```
 
-### Chunked Processing
+### Chunk Structure
 
-Dask automatically chunks large arrays:
+dhybridrpy splits large lazy arrays into several chunks along the last
+axis, with the chunk size chosen by the library. Each chunk is read from
+the file separately, so slicing a lazy array reads only the chunks the
+slice touches:
 
 ```python
 Bx = dpy.timestep(1).fields.Bx()
 
-# View chunk structure
-print(Bx.data.chunks)  # e.g., ((256, 256), (128, 128))
+# View chunk structure: one entry per axis, listing chunk sizes.
+# Only the last axis is split, e.g. for a (512, 512, 512) volume:
+print(Bx.data.chunks)
+# ((512,), (512,), (64, 64, 64, 64, 64, 64, 64, 64))
+
+# Only the chunks covering this slab are read
+subset = Bx.data[:, :, 100:200].compute()
 ```
+
+Small arrays are a single chunk.
 
 ## Performance Tips
 
@@ -134,4 +144,10 @@ data_dict = raw.dict
 
 # Compute specific quantities
 positions_x = data_dict['x1'].compute()
+
+# Or index a single dataset directly
+positions_x = raw['x1'].compute()
 ```
+
+Note that `raw.load()` reads eagerly and raises an error in lazy mode;
+use `raw.dict` or indexing instead.

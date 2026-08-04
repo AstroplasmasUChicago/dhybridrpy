@@ -106,6 +106,62 @@ fastest_track = max(tracks, key=final_speed)
 print(f"Fastest: {fastest_track.track_id}")
 ```
 
+## Working with a TrackCollection
+
+`TrackCollection` holds all tracks of one species in a single file. It
+can be constructed directly from the track file path:
+
+```python
+from dhybridrpy import TrackCollection
+
+collection = TrackCollection(
+    file_path="path/to/Output/Tracks/Sp01/track_Sp01.h5",
+    species=1,
+)
+```
+
+### Iteration and Indexing
+
+A collection supports `len()`, iteration over `Track` objects in
+rank-tag order, and indexing by track ID:
+
+```python
+print(f"{len(collection)} tracks")
+
+for track in collection:
+    print(track.track_id, track.ene.max())
+
+track = collection['0-1465']
+```
+
+### Loading One Dataset for Many Tracks
+
+Reading track by track opens the same datasets one at a time. When you
+need one quantity for many tracks, `load_dataset` reads it for all of
+them in a single pass over the file:
+
+```python
+# {track_id: array} for every track
+energies = collection.load_dataset('ene')
+
+# Or just for selected tracks
+energies = collection.load_dataset('ene', track_ids=['0-1', '0-2'])
+```
+
+Tracks may have different lengths, so values are returned per track
+rather than stacked into one array.
+
+### Closing the File Handle
+
+Reads share one open file handle, which opens on first use. Call
+`close()` to release it (reads reopen it automatically), or use the
+collection as a context manager:
+
+```python
+with collection:
+    energies = collection.load_dataset('ene')
+```
+
 ## Working with Multiple Species
 
 If your simulation tracks multiple species, specify the species number:

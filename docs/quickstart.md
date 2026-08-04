@@ -24,19 +24,34 @@ dpy = DHybridrpy(
 # Get an array of all available timesteps
 timesteps = dpy.timesteps()
 print(f"Available timesteps: {timesteps}")
+
+# Get the simulation time of each timestep
+times = dpy.times()
 ```
+
+Raw particle data may be dumped at different intervals than fields and
+phases. Use `dpy.raw_timesteps()` and `dpy.raw_times()` for those.
 
 ### Access Input Parameters
 
-The simulation input parameters are parsed and available as a dictionary:
+The simulation input parameters are parsed and available as a dictionary.
+The sections and keys match the input file itself, for example `node_conf`,
+`time`, and `grid_space`:
 
 ```python
+# View all input sections
+print(list(dpy.inputs.keys()))
+# ['node_conf', 'time', 'grid_space', 'global_output', ...]
+
 # Access the time step size
 dt = dpy.inputs['time']['dt']
 print(f"Time step: {dt}")
 
-# View all input sections
-print(dpy.inputs.keys())
+# Access the grid: cells per dimension and box size
+ncells = dpy.inputs['grid_space']['ncells']
+boxsize = dpy.inputs['grid_space']['boxsize']
+print(f"Grid cells: {ncells}")   # e.g., [128, 64]
+print(f"Box size: {boxsize}")    # e.g., [64.0, 32.0]
 ```
 
 ## Working with Timestep Data
@@ -151,6 +166,24 @@ B_mag = np.sqrt(Bx**2 + By**2 + Bz**2)
 B_mag.plot(title="Magnetic Field Magnitude")
 plt.show()
 ```
+
+## Reading Across Timesteps
+
+To study time evolution, avoid looping over timesteps one at a time.
+Use `field_timeseries` (or `phase_timeseries`), which reads the files
+in parallel worker processes:
+
+```python
+# All timesteps of Bx as one array of shape (num_timesteps, *grid)
+Bx_all = dpy.field_timeseries("Bx")
+
+# Reduce each timestep inside the workers instead of loading everything
+import numpy as np
+Bx_means = dpy.field_timeseries("Bx", apply=np.mean)
+```
+
+See [Working with Data](user-guide/working-with-data.md) for details,
+including the guard needed when calling these from a script.
 
 ## Next Steps
 

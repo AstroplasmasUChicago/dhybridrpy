@@ -11,34 +11,53 @@ Represents a single particle track across all timesteps. Obtained via
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
+| `file_path` | `str` | Path to the track HDF5 file |
 | `track_id` | `str` | Particle identifier in format `'rank-tag'` |
 | `species` | `int` | Species number |
 | `lazy` | `bool` | Whether lazy loading is enabled |
 
-### Properties
+### Dataset Access
 
-All properties return `np.ndarray` (or `dask.array.Array` if lazy loading is enabled). The suffixes 1, 2, 3 correspond to the x, y, z directions.
+Every dataset in the track file is available as an attribute of the same
+name. Reads return `np.ndarray` (or `dask.array.Array` if lazy loading
+is enabled). Accessing a name that is not a dataset in the file raises
+`AttributeError`. Exactly which datasets exist depends on the run; print
+a track to list them:
+
+```python
+track = dpy.track('0-1465')
+print(track)
+# Track (track_id=0-1465, species=1):
+#   B1, B2, B3, E1, E2, E3, ene, n, p1, p2, p3, q, t, x1, x2
+```
+
+The datasets below are the ones dHybridR typically writes. The suffixes
+1, 2, 3 correspond to the x, y, z directions.
 
 #### Position
 
-| Property | Description |
-|----------|-------------|
+| Dataset | Description |
+|---------|-------------|
 | `x1` | X coordinate over time |
 | `x2` | Y coordinate over time |
 | `x3` | Z coordinate over time |
 
-#### Velocity
+#### Proper Velocity
 
-| Property | Description |
-|----------|-------------|
-| `v1` | X velocity over time |
-| `v2` | Y velocity over time |
-| `v3` | Z velocity over time |
+dHybridR track files store proper velocity (gamma times velocity) as
+`p1`, `p2`, `p3`. There are no `v1`, `v2`, `v3` datasets unless the run
+wrote them.
+
+| Dataset | Description |
+|---------|-------------|
+| `p1` | X proper velocity over time |
+| `p2` | Y proper velocity over time |
+| `p3` | Z proper velocity over time |
 
 #### Electromagnetic Fields
 
-| Property | Description |
-|----------|-------------|
+| Dataset | Description |
+|---------|-------------|
 | `B1` | X magnetic field at particle position over time |
 | `B2` | Y magnetic field at particle position over time |
 | `B3` | Z magnetic field at particle position over time |
@@ -48,8 +67,8 @@ All properties return `np.ndarray` (or `dask.array.Array` if lazy loading is ena
 
 #### Other
 
-| Property | Description |
-|----------|-------------|
+| Dataset | Description |
+|---------|-------------|
 | `t` | Simulation time |
 | `n` | Iteration number at which each value was stored (e.g., `[10, 20, 30, ...]`) |
 | `ene` | Particle energy over time |
@@ -65,6 +84,9 @@ track = dpy.track('0-1465')
 
 # Get trajectory
 x, y = track.x1, track.x2
+
+# Get proper velocity components
+px, py, pz = track.p1, track.p2, track.p3
 
 # Get fields at particle position over time
 Bx, By, Bz = track.B1, track.B2, track.B3
@@ -88,6 +110,7 @@ automatically by `DHybridrpy` when track files are present in the output folder.
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
+| `file_path` | `str` | Path to the track HDF5 file |
 | `species` | `int` | Species number |
 | `lazy` | `bool` | Whether lazy loading is enabled |
 | `track_ids` | `np.ndarray` | Array of all track IDs |
@@ -134,6 +157,8 @@ faster than reading track by track.
 
 **Returns:** `{track_id: array}`. Tracks may have different lengths, so
 values are per track rather than stacked.
+
+**Raises:** `KeyError` if a track ID or the dataset is not found
 
 ```python
 energies = collection.load_dataset('ene')

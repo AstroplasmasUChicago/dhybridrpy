@@ -112,7 +112,7 @@ Use `--x-range` and `--y-range` to keep only a fractional sub-region of the simu
 dplot -i path/to/input --fields Bx --x-range 0.1 0.9 --y-range 0.1 0.9
 ```
 
-The crop is applied before the color-scale percentile scan and before rendering, so excluded cells never influence `vmin`/`vmax` either. It works for both `--fields` and `--phases` (including `Bparallel`/`Bperp`), though for phase-space plots the second axis is often momentum rather than physical `y` — check the axis labels in the output before relying on `--y-range` there.
+The crop is applied before the color-scale percentile scan and before rendering, so excluded cells never influence `vmin`/`vmax` either. It works for both `--fields` and `--phases` (including `Bparallel`/`Bperp`), though for phase-space plots the second axis is often momentum rather than physical `y`, so check the axis labels in the output before relying on `--y-range` there.
 
 ## Creating Videos
 

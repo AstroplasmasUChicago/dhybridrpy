@@ -30,8 +30,8 @@ dt = dpy.inputs['time']['dt']
 print(f"Time step: {dt}")
 
 # Access grid parameters
-nx = dpy.inputs['grid']['nx']
-print(f"Grid points in x: {nx}")
+ncells = dpy.inputs['grid_space']['ncells']
+print(f"Grid cells per dimension: {ncells}")
 ```
 
 ## Working with Fields

@@ -29,38 +29,65 @@ plt.show()
 
 ## 2D Data
 
-For 2D data, a pseudocolor plot (pcolormesh) is created:
+For 2D data, an image plot is created with `imshow`. The returned plot
+object is a matplotlib `AxesImage`:
 
 ```python
 # 2D field data
 Bx = dpy.timestep(1).fields.Bx()
-ax, mesh = Bx.plot(
+ax, image = Bx.plot(
     colormap="viridis",
     show_colorbar=True
 )
 plt.show()
 ```
 
+The image is drawn with `origin="lower"`, `interpolation="nearest"`, and
+`aspect="auto"` by default. Pass any of these as keyword arguments to
+override them.
+
 ## 3D Data
 
-For 3D data, an interactive slice viewer is created with a slider:
+For 3D data, an interactive slice viewer is created. The figure has two
+panels:
+
+- **Left**: the current 2D slice, drawn with `imshow`.
+- **Right**: a rotatable context cube showing the outer faces of the
+  volume, with a deep-red frame marking the position of the current
+  slice.
 
 ```python
 # 3D field data - interactive slice viewer
 Bx = dpy.timestep(1).fields.Bx()
-ax, mesh = Bx.plot(
+ax, image = Bx.plot(
     slice_axis="x"  # Slice along x-axis
 )
 plt.show()
 ```
 
-Use the slider to navigate through slices along the chosen axis.
+Use the slider to navigate through slices along the chosen axis, or
+press the left and right arrow keys to step one slice at a time. Each
+slice is read from the file on demand, so the full 3D volume is never
+held in memory.
+
+The color limits rescale to each slice's data range as you move through
+the volume. Pass `vmin`/`vmax` (or a `norm`) to fix them instead.
 
 ### Slice Axis Options
 
 - `slice_axis="x"`: View y-z planes at different x positions
 - `slice_axis="y"`: View x-z planes at different y positions  
 - `slice_axis="z"`: View x-y planes at different z positions
+
+### Disabling the Context Cube
+
+Pass `context_3d=False` to show only the slice panel:
+
+```python
+ax, image = Bx.plot(slice_axis="z", context_3d=False)
+```
+
+The context cube is also skipped when you pass your own `ax`.
 
 ## Plot Customization
 
@@ -94,8 +121,12 @@ Bx.plot(
     
     # 3D slice options
     slice_axis="x",  # "x", "y", or "z"
+    context_3d=True,  # Show the context cube next to the slice
 )
 ```
+
+The `plot()` method returns `(ax, artist)`. For 1D data the artist is a
+`Line2D`; for 2D data and 3D slices it is an `AxesImage`.
 
 ## Subplots
 
@@ -158,6 +189,11 @@ ani = FuncAnimation(
 )
 plt.show()
 ```
+
+A loop like this is fine for rendering frames. To compute numbers
+across timesteps (means, maxima, profiles), use `field_timeseries`
+instead of a loop; see
+[Working with Data](working-with-data.md#reading-across-timesteps).
 
 ## Saving Plots
 

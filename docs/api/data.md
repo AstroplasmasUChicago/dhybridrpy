@@ -14,7 +14,7 @@ via `dpy.timestep(ts).fields.<name>(type=...)` (see [Timestep](timestep.md)).
 | `file_path` | `str` | Path to the HDF5 file |
 | `name` | `str` | Field name (e.g., "Bx", "Ey") |
 | `timestep` | `int` | Timestep number |
-| `time` | `float` | Simulation time (read from the HDF5 file's `TIME` attribute) |
+| `time` | `float` | Simulation time (usually computed as `timestep * dt`; see [How Times Are Determined](dhybridrpy.md#how-times-are-determined)) |
 | `lazy` | `bool` | Whether lazy loading is enabled |
 | `type` | `str` | Field type: "Total", "External", or "Self" |
 
@@ -56,7 +56,7 @@ via `dpy.timestep(ts).phases.<name>(species=...)` (see [Timestep](timestep.md)).
 | `file_path` | `str` | Path to the HDF5 file |
 | `name` | `str` | Phase name (e.g., "x2x1", "Vx") |
 | `timestep` | `int` | Timestep number |
-| `time` | `float` | Simulation time (read from the HDF5 file's `TIME` attribute) |
+| `time` | `float` | Simulation time (usually computed as `timestep * dt`; see [How Times Are Determined](dhybridrpy.md#how-times-are-determined)) |
 | `lazy` | `bool` | Whether lazy loading is enabled |
 | `species` | `int` or `str` | Species identifier (1, 2, ... or "Total") |
 
@@ -88,7 +88,7 @@ Represents raw particle data. Obtained via
 | `file_path` | `str` | Path to the HDF5 file |
 | `name` | `str` | Always "raw" |
 | `timestep` | `int` | Timestep number |
-| `time` | `float` | Simulation time (read from the HDF5 file's `TIME` attribute) |
+| `time` | `float` | Simulation time (usually computed as `timestep * dt`; see [How Times Are Determined](dhybridrpy.md#how-times-are-determined)) |
 | `lazy` | `bool` | Whether lazy loading is enabled |
 | `species` | `int` | Species number |
 
@@ -186,6 +186,56 @@ result = Bx + By
 Bx_total = dpy.timestep(1).fields.Bx(type="Total")
 Bx_ext = dpy.timestep(1).fields.Bx(type="External")
 # result = Bx_total + Bx_ext  # Error!
+```
+
+---
+
+## Cropping
+
+Both `Field` and `Phase` have a `crop()` method that returns a new
+object restricted to a sub-region of the box.
+
+### Method Signature
+
+```python
+def crop(
+    self,
+    x_range: Optional[Tuple[float, float]] = None,
+    y_range: Optional[Tuple[float, float]] = None,
+    z_range: Optional[Tuple[float, float]] = None,
+) -> "Data"
+```
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `x_range` | `tuple` | `None` | (low, high) fraction of the box to keep along x |
+| `y_range` | `tuple` | `None` | (low, high) fraction of the box to keep along y |
+| `z_range` | `tuple` | `None` | (low, high) fraction of the box to keep along z |
+
+Each range is a pair of fractions between 0 and 1, where 0 is the start
+of the box and 1 is the end. Axes left as `None` are kept whole. A range
+with `low >= high` or values outside [0, 1] raises `ValueError`.
+
+### Returns
+
+A new instance of the same class holding a copy of the cropped region.
+Axis coordinates and limits are adjusted to match, so plotting, FFT, and
+averaging methods work on the cropped object. Crops can be chained; the
+adjusted coordinates from earlier calls are kept.
+
+### Example
+
+```python
+Bx = dpy.timestep(1).fields.Bx()
+
+# Keep the middle half of the box in x, all of y
+Bx_inner = Bx.crop(x_range=(0.25, 0.75))
+
+# Useful for excluding domain-edge artifacts (e.g. absorbing
+# boundaries) from color scales and statistics
+Bx_inner.plot()
 ```
 
 ---
@@ -628,3 +678,54 @@ plt.show()
 | `fft_power_1d()` | Anisotropic systems, direction-dependent analysis |
 
 The standard deviation band in `plot_fft_power_1d` shows the variation in power across different slices, which can reveal spatial inhomogeneity in the turbulence.
+
+---
+
+## Module-Level Functions
+
+These functions are importable directly from `dhybridrpy`.
+
+### `fft_power_iso(data, Lx, Ly=None, Lz=None, normalize=False)`
+
+The standalone version of [`fft_power`](#fft_power-method) for plain
+numpy arrays. Computes the isotropic FFT power spectrum of 1D, 2D, or
+3D data. `Ly` is required for 2D/3D data and `Lz` for 3D data. With
+`normalize=True`, each radial shell is divided by its mode count,
+giving the per-mode power instead of the summed shell energy. Returns
+`(k, power)`; power is float64 regardless of the input dtype.
+
+```python
+from dhybridrpy import fft_power_iso
+
+k, power = fft_power_iso(array, Lx=100.0, Ly=50.0)
+```
+
+### `fft_power_1d_slices(data, L, direction="x")`
+
+The standalone version of [`fft_power_1d`](#fft_power_1d-method) for
+plain numpy arrays. Computes a 1D FFT power spectrum for each slice
+along the chosen direction and returns
+`(k, power_mean, power_std_lower, power_std_upper)` with geometric
+statistics across slices. All power arrays are float64 regardless of
+the input dtype.
+
+```python
+from dhybridrpy import fft_power_1d_slices
+
+k, mean, lo, hi = fft_power_1d_slices(array, L=100.0, direction="y")
+```
+
+### `close_pooled_handles()`
+
+Interactive 3D slicing keeps a small pool of open HDF5 handles so
+neighboring slices read without reopening the file. This function
+closes them all. Call it before deleting or re-creating a sliced file
+in the same process: a pooled handle keeps the file open, so opening it
+for writing fails until the handle is released. The pool refills
+automatically on the next slice read.
+
+```python
+from dhybridrpy import close_pooled_handles
+
+close_pooled_handles()
+```

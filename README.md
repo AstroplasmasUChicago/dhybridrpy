@@ -6,12 +6,14 @@
 
 ## Features
 
-- Efficiently access simulation input data and output data like timesteps, fields (e.g., magnetic field), phases (e.g., distribution functions), and particle tracks.
-- Quickly plot 1D, 2D, and 3D output data.
+- Efficiently access simulation input data and output data like timesteps, fields (e.g., magnetic field), phases (e.g., distribution functions), raw particle data, and particle tracks.
+- Quickly plot 1D, 2D, and 3D output data, including an interactive slice viewer for 3D volumes.
+- Read a quantity across many timesteps in one call, with files read by parallel worker processes.
 - Compute FFT power spectra and 1D spatial averages.
 - Follow individual particle trajectories across a simulation.
 - Lazily load large datasets using `dask`.
 - Perform arithmetic operations on data objects directly.
+- Batch-render fields and phases from the command line with the `dplot` tool.
 
 ## Installation
 
@@ -20,6 +22,24 @@ The latest package version can be installed via pip:
 ```bash
 pip install dhybridrpy
 ```
+
+### Dependencies
+
+The following packages are installed automatically with dhybridrpy:
+
+| Package | Purpose |
+|---------|--------|
+| `h5py` | Reading HDF5 simulation output files |
+| `numpy` | Numerical array operations |
+| `matplotlib` | Plotting and visualization |
+| `dask` | Lazy loading for large datasets |
+| `f90nml` | Parsing Fortran namelist input files |
+| `typer` | Command-line interface for the `dplot` tool |
+| `joblib` | Parallel rendering in the `dplot` tool |
+| `ruff` | Code linting (development tool) |
+| `pre-commit` | Git hook management (development tool) |
+
+Optional: `scipy`, when installed, is used to run FFTs across multiple threads. `ffmpeg` is needed on your system for `dplot` video output.
 
 ## Usage
 

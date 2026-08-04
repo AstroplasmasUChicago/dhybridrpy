@@ -29,6 +29,7 @@ class DHybridrpy(
 | `input_file` | `str` | Path to the input file |
 | `output_folder` | `str` | Path to the output folder |
 | `lazy` | `bool` | Whether lazy loading is enabled |
+| `exclude_timestep_zero` | `bool` | Whether timestep 0 is excluded from the timesteps list |
 | `inputs` | `Namelist` | Parsed input file as a dictionary-like object |
 | `dt` | `float` | Simulation timestep size (from input file) |
 | `start_time` | `float` | Deprecated `t0` from the input file; 0.0 when absent (dHybridR never applied it) |
@@ -78,6 +79,24 @@ Notes: the worker pool starts on first use and persists. Workers are
 spawned processes, so in a script the call must run under an
 `if __name__ == "__main__":` guard (notebooks and interactive sessions
 need no guard; scripts piped through stdin cannot spawn workers at all).
+The pool can be shut down with
+[`close_worker_pool()`](#close_worker_pool).
+
+---
+
+### `close_worker_pool()`
+
+Module-level function, not a method. Shuts down the persistent worker
+pool used by `field_timeseries`, `phase_timeseries`, `Raw.load`, and
+large single-file reads. Calling it is optional: the pool restarts on
+the next parallel call and is cleaned up when the process exits. Use it
+to release the worker processes early.
+
+```python
+from dhybridrpy import close_worker_pool
+
+close_worker_pool()
+```
 
 ---
 
@@ -167,7 +186,7 @@ print(f"First: {all_timesteps[0]}, Last: {all_timesteps[-1]}")
 
 ### `times() -> np.ndarray`
 
-Retrieve an array of simulation times corresponding to each field/phase timestep. Times are read from the HDF5 file `TIME` attribute.
+Retrieve an array of simulation times corresponding to each field/phase timestep. See [How Times Are Determined](#how-times-are-determined).
 
 **Returns:** NumPy array of simulation times (sorted by timestep)
 
@@ -199,7 +218,7 @@ print(f"First: {raw_ts[0]}, Last: {raw_ts[-1]}")
 
 ### `raw_times() -> np.ndarray`
 
-Retrieve an array of simulation times corresponding to each raw particle timestep. Times are read from the HDF5 file `TIME` attribute.
+Retrieve an array of simulation times corresponding to each raw particle timestep. See [How Times Are Determined](#how-times-are-determined).
 
 **Returns:** NumPy array of simulation times (sorted by raw timestep)
 
@@ -210,6 +229,27 @@ raw_times = dpy.raw_times()
 print(f"Raw simulation times: {raw_times}")
 print(f"Start: {raw_times[0]}, End: {raw_times[-1]}")
 ```
+
+## How Times Are Determined
+
+Times are usually computed as `timestep * dt`, with `dt` taken from the
+input file's `time` section. This avoids opening every output file just
+to read its time. At startup, the earliest and latest output files are
+checked against this formula using their HDF5 `TIME` attributes. Three
+outcomes are possible:
+
+- The attributes match `timestep * dt`. Times are computed from `dt`
+  without opening any more files.
+- An attribute does not match, or cannot be read. A warning is logged
+  and times are read from each file's `TIME` attribute instead.
+- The two checked files imply different values of `dt`. A `ValueError`
+  is raised, since a single run with fixed `dt` cannot produce them.
+  This usually means the output folder mixes files from different runs.
+
+Runs with `adaptive_dt` set in the input file skip the check and always
+read times from the files. `start_time` (the deprecated `t0` input
+parameter, 0.0 when absent) is never added to computed times; dHybridR
+itself ignores `t0`.
 
 ## Usage Examples
 
