@@ -1,3 +1,7 @@
+import math
+import threading
+import os
+
 import h5py
 import numpy as np
 import dask.array as da
@@ -25,6 +29,85 @@ def open_h5(file_path: str, **kwargs) -> h5py.File:
     "file locking flag values don't match".
     """
     return h5py.File(file_path, "r", locking=False, **kwargs)
+
+
+# Datasets kept open for repeated 2D slicing (the interactive 3D slider).
+# HDF5's chunk cache lives on the OPEN DATASET and is freed when it closes,
+# so reopening per slice re-inflates every touched chunk; a kept dataset
+# with a cache sized to hold one slice's chunks makes neighboring slices
+# nearly free.
+_slice_handles = {}  # {(path, mtime_ns, size): (h5py.File, h5py.Dataset)}
+_slice_handles_lock = threading.Lock()
+_slice_handles_pid = os.getpid()
+_SLICE_HANDLES_MAX = 8
+_SLICE_CACHE_CAP = 512 * 1024**2  # per-file chunk cache ceiling
+_SLOT_PRIMES = (1009, 10007, 100003, 1000003)
+
+
+def close_pooled_handles() -> None:
+    """Close all pooled slicing handles.
+
+    Needed before deleting or re-creating a sliced file in this process:
+    a pooled handle keeps the file open, so h5py.File(path, "w") on it
+    fails until the handle is released.
+    """
+    with _slice_handles_lock:
+        for handle, _ in _slice_handles.values():
+            try:
+                handle.close()
+            except Exception:
+                pass
+        _slice_handles.clear()
+
+
+def _pooled_dataset(file_path: str) -> h5py.Dataset:
+    global _slice_handles_pid
+    with _slice_handles_lock:
+        if os.getpid() != _slice_handles_pid:
+            # forked child: parent handles are unusable; start fresh
+            _slice_handles.clear()
+            _slice_handles_pid = os.getpid()
+
+        stat = os.stat(file_path)
+        key = (file_path, stat.st_mtime_ns, stat.st_size)
+        entry = _slice_handles.get(key)
+        if entry is not None:
+            _slice_handles[key] = _slice_handles.pop(key)  # refresh recency
+            return entry[1]
+
+        # A replaced file gets a fresh handle. Evicted and stale entries are
+        # dropped WITHOUT close(): a caller may still hold their Dataset, and
+        # the read-only file closes on garbage collection once released.
+        for old_key in [k for k in _slice_handles if k[0] == file_path]:
+            _slice_handles.pop(old_key, None)
+
+        with open_h5(file_path) as probe:
+            dataset = probe["DATA"]
+            chunks, shape, itemsize = (
+                dataset.chunks, dataset.shape, dataset.dtype.itemsize,
+            )
+
+        kwargs = {}
+        if chunks is not None:
+            chunk_bytes = math.prod(chunks) * itemsize
+            chunk_counts = [-(-s // c) for s, c in zip(shape, chunks)]
+            # most chunks any single 2D slice can touch
+            slice_chunks = max(
+                math.prod(chunk_counts) // n for n in chunk_counts
+            )
+            kwargs["rdcc_nbytes"] = min(
+                2 * slice_chunks * chunk_bytes, _SLICE_CACHE_CAP
+            )
+            cached = kwargs["rdcc_nbytes"] // max(chunk_bytes, 1)
+            kwargs["rdcc_nslots"] = next(
+                (p for p in _SLOT_PRIMES if p >= 20 * cached), _SLOT_PRIMES[-1]
+            )
+
+        handle = open_h5(file_path, **kwargs)
+        _slice_handles[key] = (handle, handle["DATA"])
+        while len(_slice_handles) > _SLICE_HANDLES_MAX:
+            _slice_handles.pop(next(iter(_slice_handles)), None)
+        return _slice_handles[key][1]
 
 
 def fft_power_iso(
@@ -386,22 +469,25 @@ class Data(BaseProperties):
         the slider doesn't have to hold the entire 3D volume.
         """
         if self.name in self._data_dict:
-            arr = self._materialize(self._data_dict[self.name])
+            arr = self._data_dict[self.name]
             if slice_axis == "x":
-                return arr[idx, :, :]
-            if slice_axis == "y":
-                return arr[:, idx, :]
-            return arr[:, :, idx]
+                arr = arr[idx, :, :]
+            elif slice_axis == "y":
+                arr = arr[:, idx, :]
+            else:
+                arr = arr[:, :, idx]
+            # slice before materializing so a lazy array computes one plane,
+            # not the whole cube
+            return self._materialize(arr)
 
         # HDF5 stores (nz, ny, nx); after the .T in `data`, the numpy convention
         # is (nx, ny, nz). Mirror that here while reading only what's needed.
-        with open_h5(self.file_path) as f:
-            ds = f["DATA"]
-            if slice_axis == "x":
-                return np.asarray(ds[:, :, idx]).T  # -> (ny, nz)
-            if slice_axis == "y":
-                return np.asarray(ds[:, idx, :]).T  # -> (nx, nz)
-            return np.asarray(ds[idx, :, :]).T  # -> (nx, ny)
+        ds = _pooled_dataset(self.file_path)
+        if slice_axis == "x":
+            return np.asarray(ds[:, :, idx]).T  # -> (ny, nz)
+        if slice_axis == "y":
+            return np.asarray(ds[:, idx, :]).T  # -> (nx, nz)
+        return np.asarray(ds[idx, :, :]).T  # -> (nx, ny)
 
     def _materialize(self, arr: Union[np.ndarray, da.Array]) -> np.ndarray:
         """Return a numpy array for `arr`, calling .compute() if it's a dask array.
