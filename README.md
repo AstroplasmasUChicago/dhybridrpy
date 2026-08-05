@@ -23,24 +23,6 @@ The latest package version can be installed via pip:
 pip install dhybridrpy
 ```
 
-### Dependencies
-
-The following packages are installed automatically with dhybridrpy:
-
-| Package | Purpose |
-|---------|--------|
-| `h5py` | Reading HDF5 simulation output files |
-| `numpy` | Numerical array operations |
-| `matplotlib` | Plotting and visualization |
-| `dask` | Lazy loading for large datasets |
-| `f90nml` | Parsing Fortran namelist input files |
-| `typer` | Command-line interface for the `dplot` tool |
-| `joblib` | Parallel rendering in the `dplot` tool |
-| `ruff` | Code linting (development tool) |
-| `pre-commit` | Git hook management (development tool) |
-
-Optional: `scipy`, when installed, is used to run FFTs across multiple threads. `ffmpeg` is needed on your system for `dplot` video output.
-
 ## Usage
 
 Basic usage of the package:
