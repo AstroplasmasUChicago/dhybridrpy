@@ -101,7 +101,7 @@ Represents raw particle data. Obtained via
 |------|-------------|
 | `dict` | Dictionary of all raw data arrays (reads every dataset) |
 | `keys()` | Dataset names without reading any data |
-| `raw[key]` | Read one dataset, e.g. `raw["ene"]` |
+| `raw[key]` | Read one dataset, e.g. `raw["v1"]` |
 | `key in raw` | Whether a dataset exists |
 | `load(keys=None, workers=None)` | Read several datasets at once. Faster than `dict` or a loop over keys because the reads run in parallel worker processes (eager only) |
 
@@ -114,7 +114,7 @@ print(raw.keys())  # e.g., ['x1', 'x2', 'x3', 'v1', 'v2', 'v3']
 
 # One dataset without reading the rest. The v datasets are regular
 # velocities in units of the Alfven speed.
-energies = raw["ene"]
+vx = raw["v1"]
 
 # Several datasets, read by parallel worker processes
 positions = raw.load(keys=["x1", "x2", "x3"])

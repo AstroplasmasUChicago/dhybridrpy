@@ -1743,7 +1743,7 @@ class Raw(BaseProperties):
         return key in self.keys()
 
     def __getitem__(self, key: str) -> Union[np.ndarray, da.Array]:
-        """Read a single dataset, e.g. raw["ene"]."""
+        """Read a single dataset, e.g. raw["v1"]."""
         with open_h5(self.file_path) as file:
             if key not in file:
                 raise KeyError(

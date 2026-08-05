@@ -245,11 +245,11 @@ Raw files contain particle-level data:
 raw = dpy.timestep(1).raw_files.raw(species=1)
 
 # List available datasets without reading any data
-print(raw.keys())  # e.g., ['ene', 'v1', 'v2', 'v3', 'x1', 'x2']
+print(raw.keys())  # e.g., ['q', 'tag', 'v1', 'v2', 'v3', 'x1', 'x2', 'x3']
 
 # Check for a dataset
-if 'ene' in raw:
-    print("energies available")
+if 'v1' in raw:
+    print("velocities available")
 ```
 
 ### Reading Selected Datasets
@@ -262,8 +262,8 @@ several at once with the worker pool:
 x = raw['x1']
 
 # Read several datasets in parallel worker processes
-data = raw.load(['x1', 'x2', 'ene'])
-print(data['ene'])
+data = raw.load(['x1', 'x2', 'v1'])
+print(data['v1'])
 
 # Read everything in parallel
 data = raw.load()
