@@ -28,7 +28,7 @@ a track to list them:
 track = dpy.track('0-1465')
 print(track)
 # Track (track_id=0-1465, species=1):
-#   B1, B2, B3, E1, E2, E3, ene, n, p1, p2, p3, q, t, x1, x2
+#   B1, B2, B3, E1, E2, E3, ene, n, q, t, v1, v2, v3, x1, x2
 ```
 
 The datasets below are the ones dHybridR typically writes. The suffixes
@@ -44,18 +44,14 @@ The datasets below are the ones dHybridR typically writes. The suffixes
 
 #### Velocity
 
-Velocities are stored in units of the Alfven speed. Current dHybridR
-names these datasets `v1`, `v2`, `v3`; older track files name the same
-quantities `p1`, `p2`, `p3`. Despite the p names, the values are
-regular velocities, not momenta or proper velocities. (Input-file
-quantities such as `uth` and `vdrift` are proper velocities, but they
-are converted at initialization.)
+Velocities are stored in units of the Alfven speed. These are regular
+velocities, not momenta or proper velocities.
 
 | Dataset | Description |
 |---------|-------------|
-| `v1` (or `p1`) | X velocity over time |
-| `v2` (or `p2`) | Y velocity over time |
-| `v3` (or `p3`) | Z velocity over time |
+| `v1` | X velocity over time |
+| `v2` | Y velocity over time |
+| `v3` | Z velocity over time |
 
 #### Electromagnetic Fields
 
@@ -88,8 +84,8 @@ track = dpy.track('0-1465')
 # Get trajectory
 x, y = track.x1, track.x2
 
-# Get velocity components (p1/p2/p3 in older track files)
-vx, vy, vz = track.p1, track.p2, track.p3
+# Get velocity components
+vx, vy, vz = track.v1, track.v2, track.v3
 
 # Get fields at particle position over time
 Bx, By, Bz = track.B1, track.B2, track.B3
