@@ -210,8 +210,8 @@ plt.show()
 
 ```python
 # Get the proper velocity distribution. The p axes of phase diagrams
-# are proper velocity (gamma times velocity), unlike the p datasets in
-# raw files.
+# are proper velocity (gamma times velocity), unlike the v datasets in
+# raw and track files, which are regular velocity.
 f_p2p1 = dpy.timestep(1).phases.p2p1(species=1)
 
 f_p2p1.plot(

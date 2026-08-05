@@ -1,9 +1,9 @@
 # Timestep
 
 Container class for accessing field, phase, and raw data at a specific timestep.
-Obtained via [`dpy.timestep(ts)`](dhybridrpy.md#timestepts-int---timestep),
-[`dpy.timestep_closest(...)`](dhybridrpy.md#timestep_closestts-int-verbose-bool--false---timestep),
-or [`dpy.timestep_index(...)`](dhybridrpy.md#timestep_indexindex-int---timestep).
+Obtained via [`dpy.timestep(ts)`](dhybridrpy.md#timestepts-int-timestep),
+[`dpy.timestep_closest(...)`](dhybridrpy.md#timestep_closestts-int-verbose-bool-false-timestep),
+or [`dpy.timestep_index(...)`](dhybridrpy.md#timestep_indexindex-int-timestep).
 
 ### Attributes
 
@@ -66,7 +66,7 @@ The `phases` attribute provides dynamic access to phase space data:
 ```python
 ts = dpy.timestep(1)
 
-# Distribution functions
+# Phase diagrams
 x2x1 = ts.phases.x2x1()  # charge density in x-y
 p1x1 = ts.phases.p1x1()  # x-px phase space
 p2p1 = ts.phases.p2p1()  # px-py proper velocity space

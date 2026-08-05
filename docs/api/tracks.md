@@ -5,7 +5,7 @@ Classes for accessing particle track data from dHybridR simulations.
 ## Track
 
 Represents a single particle track across all timesteps. Obtained via
-[`dpy.track(track_id, species=...)`](#tracktrack_id-str-species-int--1---track).
+[`dpy.track(track_id, species=...)`](#tracktrack_id-str-species-int-1-track).
 
 ### Attributes
 

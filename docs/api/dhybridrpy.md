@@ -170,7 +170,7 @@ ts_last = dpy.timestep_index(-1)
 
 ### `timesteps() -> np.ndarray`
 
-Retrieve an array of available timesteps for fields and phases. Raw particle data may be dumped at different intervals; use [`raw_timesteps()`](#raw_timesteps---npndarray) to get those.
+Retrieve an array of available timesteps for fields and phases. Raw particle data may be dumped at different intervals; use [`raw_timesteps()`](#raw_timesteps-npndarray) to get those.
 
 **Returns:** NumPy array of field/phase timestep numbers (sorted)
 
