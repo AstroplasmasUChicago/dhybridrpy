@@ -11,7 +11,7 @@ DHybridrpy
 ├── inputs (simulation parameters)
 └── timesteps
     ├── fields (B, E, J components)
-    ├── phases (distribution functions, fluid quantities)
+    ├── phases (phase diagrams, fluid quantities)
     └── raw_files (raw particle data)
 ```
 
@@ -122,19 +122,29 @@ Bx_self = dpy.timestep(1).fields.Bx(type="Self")
 
 ## Phase Data
 
-Phase data includes distribution functions and fluid quantities.
+Phase data includes phase diagrams and fluid quantities. Phase diagrams
+are charge density deposited on a 2D grid: each particle contributes its
+charge, so purely spatial diagrams such as `x2x1` and `x3x2x1` are the
+charge density of the species. The axis codes in a diagram name are:
+
+| Code | Axis |
+|------|------|
+| `x1`, `x2`, `x3` | Position (x, y, z) |
+| `p1`, `p2`, `p3` | Proper velocity component (gamma times velocity), unlike the `p` datasets in raw files |
+| `pt` | Magnitude of the proper velocity |
+| `et` | Kinetic energy on a natural log axis, so `etx1` is charge per log energy along x |
 
 ### Accessing Phase Data
 
 ```python
-# Distribution function in x-y space
+# Charge density in x-y space
 f_xy = dpy.timestep(1).phases.x2x1()
 
-# Velocity distribution
-f_vxvy = dpy.timestep(1).phases.p2p1()
+# Charge density in proper velocity space
+f_p2p1 = dpy.timestep(1).phases.p2p1()
 
-# Phase space
-f_xvx = dpy.timestep(1).phases.p1x1()
+# Charge per log energy along x
+f_etx = dpy.timestep(1).phases.etx1()
 ```
 
 ### Species Selection

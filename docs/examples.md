@@ -173,18 +173,17 @@ plt.show()
 
 ## Working with Phase Data
 
-### Distribution Functions
+### Phase Diagrams
 
 ```python
 import matplotlib.pyplot as plt
 
-# Get phase space distribution
+# Get the charge density in x-y space
 f_xy = dpy.timestep(1).phases.x2x1(species=1)
 
-# Plot distribution
 f_xy.plot(
     colormap="hot",
-    title="Particle Distribution (Species 1)"
+    title="Charge Density (Species 1)"
 )
 plt.show()
 ```
@@ -426,11 +425,10 @@ plt.show()
 ```python
 import matplotlib.pyplot as plt
 
-# Get density profile averaged along x
+# Get the charge density profile averaged along x
 phase = dpy.timestep(1).phases.x3x2x1(species=1)
 
-# Plot averaged density profile
-ax, line = phase.plot_1d_avg("x", title="Density Profile (species 1)")
+ax, line = phase.plot_1d_avg("x", title="Charge Density Profile (species 1)")
 plt.savefig("density_profile.png", dpi=150)
 plt.show()
 ```

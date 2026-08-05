@@ -46,7 +46,10 @@ print(Bx.data.shape) # e.g., (256, 128)
 
 ## Phase
 
-Represents phase space data (distribution functions, fluid quantities). Obtained
+Represents phase space data (charge density diagrams such as `x2x1` or `etx1`,
+and fluid quantities). See
+[Phase Data](../user-guide/working-with-data.md#phase-data) for what each
+diagram name means. Obtained
 via `dpy.timestep(ts).phases.<name>(species=...)` (see [Timestep](timestep.md)).
 
 ### Attributes

@@ -67,9 +67,9 @@ The `phases` attribute provides dynamic access to phase space data:
 ts = dpy.timestep(1)
 
 # Distribution functions
-x2x1 = ts.phases.x2x1()  # x-y distribution
+x2x1 = ts.phases.x2x1()  # charge density in x-y
 p1x1 = ts.phases.p1x1()  # x-px phase space
-p2p1 = ts.phases.p2p1()  # px-py velocity space
+p2p1 = ts.phases.p2p1()  # px-py proper velocity space
 
 # Fluid quantities
 Vx = ts.phases.Vx()  # Bulk velocity x

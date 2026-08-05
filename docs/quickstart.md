@@ -110,7 +110,8 @@ Accelx = dpy.timestep(1).fields.Accelx(type="External")
 
 ## Accessing Phases
 
-Phase data includes distribution functions and fluid quantities:
+Phase data includes phase diagrams (charge density in position, proper
+velocity, and log energy spaces) and fluid quantities:
 
 ```python
 # Get phase data for species 1 (default)
