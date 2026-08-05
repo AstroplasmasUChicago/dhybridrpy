@@ -2,7 +2,7 @@
 
 ![PyPI version](https://img.shields.io/pypi/v/dhybridrpy?label=PyPI&color=blue) [![Documentation Status](https://readthedocs.org/projects/dhybridrpy/badge/?version=latest)](https://dhybridrpy.readthedocs.io/en/latest/?badge=latest)
 
-`dhybridrpy` allows you to easily load and plot data from `dHybridR` simulations. It provides programmatic access to simulation input and output data and the ability to quickly visualize that data.
+`dhybridrpy` is an efficient Python package that allows you to easily load and plot data from `dHybridR` simulations. It provides programmatic access to simulation input and output data and the ability to quickly visualize that data.
 
 ## Features
 
