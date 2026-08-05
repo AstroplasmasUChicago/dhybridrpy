@@ -110,10 +110,10 @@ Represents raw particle data. Obtained via
 ```python
 raw = dpy.timestep(1).raw_files.raw(species=1)
 
-print(raw.keys())  # e.g., ['x1', 'x2', 'x3', 'p1', 'p2', 'p3']
+print(raw.keys())  # e.g., ['x1', 'x2', 'x3', 'v1', 'v2', 'v3']
 
-# One dataset without reading the rest. Despite the p names, p1/p2/p3
-# hold regular velocities in units of the Alfven speed.
+# One dataset without reading the rest. The v datasets are regular
+# velocities in units of the Alfven speed.
 energies = raw["ene"]
 
 # Several datasets, read by parallel worker processes

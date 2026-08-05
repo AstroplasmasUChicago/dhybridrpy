@@ -132,7 +132,7 @@ number density. The axis codes in a diagram name are:
 | Code | Axis |
 |------|------|
 | `x1`, `x2`, `x3` | Position (x, y, z) |
-| `p1`, `p2`, `p3` | Proper velocity component (gamma times velocity), unlike the `p` datasets in raw files |
+| `p1`, `p2`, `p3` | Proper velocity component (gamma times velocity), unlike the `v` datasets in raw and track files, which are regular velocity |
 | `pt` | Magnitude of the proper velocity |
 | `et` | Kinetic energy on a natural log axis, so `etx1` is charge per log energy along x |
 
@@ -245,7 +245,7 @@ Raw files contain particle-level data:
 raw = dpy.timestep(1).raw_files.raw(species=1)
 
 # List available datasets without reading any data
-print(raw.keys())  # e.g., ['ene', 'p1', 'p2', 'p3', 'x1', 'x2']
+print(raw.keys())  # e.g., ['ene', 'v1', 'v2', 'v3', 'x1', 'x2']
 
 # Check for a dataset
 if 'ene' in raw:
