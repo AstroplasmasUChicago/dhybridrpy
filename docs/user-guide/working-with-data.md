@@ -123,9 +123,11 @@ Bx_self = dpy.timestep(1).fields.Bx(type="Self")
 ## Phase Data
 
 Phase data includes phase diagrams and fluid quantities. Phase diagrams
-are charge density deposited on a 2D grid: each particle contributes its
-charge, so purely spatial diagrams such as `x2x1` and `x3x2x1` are the
-charge density of the species. The axis codes in a diagram name are:
+are charge density deposited on a 2D grid: each particle contributes the
+absolute value of its charge, so signs never cancel, and purely spatial
+diagrams such as `x2x1` and `x3x2x1` are the charge density of the
+species. For singly charged ions the values are numerically the particle
+number density. The axis codes in a diagram name are:
 
 | Code | Axis |
 |------|------|
