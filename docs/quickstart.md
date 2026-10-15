@@ -106,6 +106,10 @@ Bx_self = dpy.timestep(1).fields.Bx(type="Self")
 # The external acceleration field is only written as an External field,
 # so it must be requested with type="External"
 Accelx = dpy.timestep(1).fields.Accelx(type="External")
+
+# Electron pressure and temperature, dumped by runs with the evolved electron closure
+Pe = dpy.timestep(1).fields.Pe()
+Te = dpy.timestep(1).fields.Te()
 ```
 
 ## Accessing Phases

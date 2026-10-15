@@ -87,9 +87,10 @@ class DHybridrpy:
         "Electric": "E",
         "CurrentDens": "J",
         "ExtAccel": "Accel",
+        "ElectronPres": "",
     }
     _PHASE_MAPPING = {"FluidVel": "V", "PressureTen": "P"}
-    _COMPONENT_MAPPING = {"Intensity": "magnitude"}
+    _COMPONENT_MAPPING = {"Intensity": "magnitude", "pe": "Pe"}
     _SPECIES_PATTERN = re.compile(r"\d+")
     _TIMESTEP_PATTERN = re.compile(r"_(\d+)\.h5$")
     _TIME_NDECIMALS = 6
@@ -257,7 +258,7 @@ class DHybridrpy:
             component = self._COMPONENT_MAPPING[component]
 
         prefix = self._FIELD_MAPPING.get(category)
-        if not prefix:
+        if prefix is None:
             logger.warning(f"Unknown category '{category}'. Skipping {filename}")
             return
 
