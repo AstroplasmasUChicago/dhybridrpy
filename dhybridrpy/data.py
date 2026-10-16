@@ -470,9 +470,14 @@ class Data(BaseProperties):
     _PY = "$p_y / (m_i v_A)$"
     _PZ = "$p_z / (m_i v_A)$"
     _PTOT = "$p_{tot} / (m_i v_A)$"
+    _UX = "$u_x / v_A$"
+    _UY = "$u_y / v_A$"
+    _UZ = "$u_z / v_A$"
+    _UTOT = r"$|\mathbf{u}| / v_A$"
     _ETOT = r"$\ln\left(\frac{e_{tot}}{m_i v_A^2}\right)$"
 
     _LABEL_MAPPINGS = {
+        # p* names are retained for backward compatibility with older output.
         "p1x1": (_X, _PX),
         "p1x2": (_Y, _PX),
         "p1x3": (_Z, _PX),
@@ -482,15 +487,30 @@ class Data(BaseProperties):
         "p3x1": (_X, _PZ),
         "p3x2": (_Y, _PZ),
         "p3x3": (_Z, _PZ),
+        "u1x1": (_X, _UX),
+        "u1x2": (_Y, _UX),
+        "u1x3": (_Z, _UX),
+        "u2x1": (_X, _UY),
+        "u2x2": (_Y, _UY),
+        "u2x3": (_Z, _UY),
+        "u3x1": (_X, _UZ),
+        "u3x2": (_Y, _UZ),
+        "u3x3": (_Z, _UZ),
         "x2x1": (_X, _Y),
         "x3x1": (_X, _Z),
         "x3x2": (_Y, _Z),
         "p2p1": (_PX, _PY),
         "p3p1": (_PX, _PZ),
         "p3p2": (_PY, _PZ),
+        "u2u1": (_UX, _UY),
+        "u3u1": (_UX, _UZ),
+        "u3u2": (_UY, _UZ),
         "ptx1": (_X, _PTOT),
         "ptx2": (_Y, _PTOT),
         "ptx3": (_Z, _PTOT),
+        "utx1": (_X, _UTOT),
+        "utx2": (_Y, _UTOT),
+        "utx3": (_Z, _UTOT),
         "etx1": (_X, _ETOT),
         "etx2": (_Y, _ETOT),
         "etx3": (_Z, _ETOT),
