@@ -1,228 +1,79 @@
-# Particle Tracks
+# Particle tracks
 
-This guide covers how to work with particle track data in dhybridrpy.
+Use tracks to follow a particle's position, velocity, or energy over time.
+Your run must have saved track output under `Output/Tracks`.
 
-## Overview
-
-Particle tracks record the trajectory of individual particles throughout the simulation.
-
-## Getting Started
-
-### List Available Track IDs
+## Open a track
 
 ```python
 from dhybridrpy import DHybridrpy
 
-dpy = DHybridrpy(
-    input_file="path/to/input",
-    output_folder="path/to/Output"
-)
+dpy = DHybridrpy(input_file="run/input", output_folder="run/Output")
+track_ids = dpy.tracks(species=1)
+print(track_ids)
 
-# Get array of all track IDs for species 1 (default)
-track_ids = dpy.tracks()
-print(f"Found {len(track_ids)} tracks")
-print(track_ids[:5])  # e.g., ['0-1', '0-2', '0-3', '0-4', '0-5']
+track = dpy.track(track_ids[0], species=1)
+print(track)
 ```
 
-Track IDs are in the format `'rank-tag'` where `rank` is the MPI rank and `tag` is the particle's unique identifier.
+Choose an ID from `dpy.tracks()`; `print(track)` lists its available datasets.
+IDs have the form `"rank-tag"`.
 
-### Access a Single Track
+## Plot a trajectory
+
+For a run with at least two spatial dimensions:
 
 ```python
-# Get the first track
-track_id = dpy.tracks()[0]
-track = dpy.track(track_id)
+import matplotlib.pyplot as plt
 
-# Or directly by ID
-track = dpy.track('0-1465')
+plt.plot(track.x1, track.x2)
+plt.xlabel(r"$x/d_i$")
+plt.ylabel(r"$y/d_i$")
+plt.show()
 ```
 
-### Track Properties
+Position datasets `x1`, `x2`, and `x3` correspond to x, y, and z.
+Only the simulated dimensions are stored.
 
-Each track provides position, velocity, field, and other data over time. The suffixes 1, 2, 3 correspond to x, y, z directions:
+## Plot energy over time
 
 ```python
-track = dpy.track(track_id)
-
-# Position components
-x = track.x1  # x coordinate
-y = track.x2  # y coordinate
-
-# Velocity components
-vx = track.v1  # x velocity
-vy = track.v2  # y velocity
-vz = track.v3  # z velocity
-
-# Electromagnetic fields at particle position
-Bx = track.B1  # x magnetic field
-By = track.B2  # y magnetic field
-Bz = track.B3  # z magnetic field
-Ex = track.E1  # x electric field
-
-# Time and iteration info
-t = track.t      # simulation time
-n = track.n      # iteration numbers (e.g., [10, 20, 30, ...])
-
-# Energy and charge
-ene = track.ene  # particle energy
-q = track.q      # particle charge
+plt.plot(track.t, track.ene)
+plt.xlabel(r"$t\omega_{ci}$")
+plt.ylabel(r"$E_{\mathrm{kin}}/(m_p v_A^2)$")
+plt.show()
 ```
 
-All properties return NumPy arrays with one value per stored iteration.
+Use each track's stored `t` array: tracks can start and end at different
+times. The [dataset reference](../api/tracks.md#datasets) lists velocities,
+iteration numbers, and optional fields.
 
-## Iterating Over Tracks
+## Compare many tracks
 
-### Using Track IDs
-
-For bulk operations, use `tracks()` to get an array of track IDs and iterate:
-
-```python
-# Iterate over all tracks
-for track_id in dpy.tracks():
-    track = dpy.track(track_id)
-    print(f"Track {track.track_id}: final x = {track.x1[-1]:.2f}")
-
-# Get total number of tracks
-n_tracks = len(dpy.tracks())
-print(f"Total: {n_tracks} tracks")
-```
-
-### Filtering Tracks
-
-Use list comprehensions to filter tracks by criteria:
-
-```python
-# Find tracks that reached x > 100
-far_tracks = [dpy.track(tid) for tid in dpy.tracks() if dpy.track(tid).x1[-1] > 100]
-
-# Find most energetic particle at end of simulation
-import numpy as np
-
-def final_speed(track):
-    return np.sqrt(track.v1[-1]**2 + track.v2[-1]**2 + track.v3[-1]**2)
-
-tracks = [dpy.track(tid) for tid in dpy.tracks()]
-fastest_track = max(tracks, key=final_speed)
-print(f"Fastest: {fastest_track.track_id}")
-```
-
-## Working with a TrackCollection
-
-`TrackCollection` holds all tracks of one species in a single file. It
-can be constructed directly from the track file path:
+Read the same dataset from several tracks with `TrackCollection`. For
+example, find each track's peak kinetic energy:
 
 ```python
 from dhybridrpy import TrackCollection
 
-collection = TrackCollection(
-    file_path="path/to/Output/Tracks/Sp01/track_Sp01.h5",
-    species=1,
-)
+with TrackCollection("run/Output/Tracks/Sp01/track_Sp01.h5", species=1) as collection:
+    energies = collection.load_dataset("ene")
+    peak_energy = {track_id: values.max() for track_id, values in energies.items()}
 ```
 
-### Iteration and Indexing
+`load_dataset` returns a dictionary of arrays keyed by track ID; the arrays
+may have different lengths. To select tracks, pass
+`track_ids=collection.track_ids[:3]`. The `with` block closes the file when
+finished.
 
-A collection supports `len()`, iteration over `Track` objects in
-rank-tag order, and indexing by track ID:
+## Load tracks lazily
 
 ```python
-print(f"{len(collection)} tracks")
-
-for track in collection:
-    print(track.track_id, track.ene.max())
-
-track = collection['0-1465']
+dpy = DHybridrpy("run/input", "run/Output", lazy=True)
+track = dpy.track(dpy.tracks(species=1)[0], species=1)
+x = track.x1.compute()
 ```
 
-### Loading One Dataset for Many Tracks
-
-Reading track by track opens the same datasets one at a time. When you
-need one quantity for many tracks, `load_dataset` reads it for all of
-them in a single pass over the file:
-
-```python
-# {track_id: array} for every track
-energies = collection.load_dataset('ene')
-
-# Or just for selected tracks
-energies = collection.load_dataset('ene', track_ids=['0-1', '0-2'])
-```
-
-Tracks may have different lengths, so values are returned per track
-rather than stacked into one array.
-
-### Closing the File Handle
-
-Reads share one open file handle, which opens on first use. Call
-`close()` to release it (reads reopen it automatically), or use the
-collection as a context manager:
-
-```python
-with collection:
-    energies = collection.load_dataset('ene')
-```
-
-## Working with Multiple Species
-
-If your simulation tracks multiple species, specify the species number:
-
-```python
-# Get tracks for species 2
-track_ids_sp2 = dpy.tracks(species=2)
-track = dpy.track('0-100', species=2)
-
-# Iterate over species 2 tracks
-for track_id in dpy.tracks(species=2):
-    track = dpy.track(track_id, species=2)
-    print(track.track_id)
-```
-
-## Plotting Trajectories
-
-### Basic Trajectory Plot
-
-```python
-import matplotlib.pyplot as plt
-
-track = dpy.track(dpy.tracks()[0])
-
-plt.figure(figsize=(10, 6))
-plt.plot(track.x1, track.x2)
-plt.xlabel('$x/d_i$')
-plt.ylabel('$y/d_i$')
-plt.title(f'Particle Trajectory: {track.track_id}')
-plt.show()
-```
-
-### Trajectory with Time Coloring
-
-```python
-import matplotlib.pyplot as plt
-import numpy as np
-
-track = dpy.track(dpy.tracks()[0])
-
-plt.figure(figsize=(10, 6))
-scatter = plt.scatter(track.x1, track.x2, c=track.t, cmap='viridis', s=1)
-plt.colorbar(scatter, label='$t \\omega_{ci}$')
-plt.xlabel('$x/d_i$')
-plt.ylabel('$y/d_i$')
-plt.title('Particle Trajectory Colored by Time')
-plt.show()
-```
-
-### Use Lazy Loading for Large Datasets
-
-Enable lazy loading to defer data loading until needed:
-
-```python
-dpy = DHybridrpy(
-    input_file="path/to/input",
-    output_folder="path/to/Output",
-    lazy=True  # Use Dask for lazy loading
-)
-
-track = dpy.track('0-1')
-# Data isn't loaded until you access it
-x = track.x1.compute()  # Now it loads
-```
+With `lazy=True`, datasets are Dask arrays until `.compute()` loads them.
+`TrackCollection` accepts the same option. See [lazy loading](lazy-loading.md)
+for calculations that defer reading data.

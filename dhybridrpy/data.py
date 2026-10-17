@@ -90,7 +90,9 @@ def _pooled_dataset(file_path: str) -> h5py.Dataset:
         with open_h5(file_path) as probe:
             dataset = probe["DATA"]
             chunks, shape, itemsize = (
-                dataset.chunks, dataset.shape, dataset.dtype.itemsize,
+                dataset.chunks,
+                dataset.shape,
+                dataset.dtype.itemsize,
             )
 
         kwargs = {}
@@ -98,9 +100,7 @@ def _pooled_dataset(file_path: str) -> h5py.Dataset:
             chunk_bytes = math.prod(chunks) * itemsize
             chunk_counts = [-(-s // c) for s, c in zip(shape, chunks)]
             # most chunks any single 2D slice can touch
-            slice_chunks = max(
-                math.prod(chunk_counts) // n for n in chunk_counts
-            )
+            slice_chunks = max(math.prod(chunk_counts) // n for n in chunk_counts)
             kwargs["rdcc_nbytes"] = min(
                 2 * slice_chunks * chunk_bytes, _SLICE_CACHE_CAP
             )
@@ -148,9 +148,9 @@ def _add_slice_context(ax3d, source, slice_axis: str, colormap: str):
         others = [i for i in range(3) if i != i_axis]
         picker = np.ix_(sampled[others[0]], sampled[others[1]])
         faces[(face_axis, 0)] = source._read_2d_slice(face_axis, 0)[picker]
-        faces[(face_axis, -1)] = source._read_2d_slice(
-            face_axis, shape[i_axis] - 1
-        )[picker]
+        faces[(face_axis, -1)] = source._read_2d_slice(face_axis, shape[i_axis] - 1)[
+            picker
+        ]
 
     norm = mcolors.Normalize(
         min(a.min() for a in faces.values()),
@@ -172,8 +172,14 @@ def _add_slice_context(ax3d, source, slice_axis: str, colormap: str):
         xyz[i_axis] = np.full_like(A, coords[i_axis][end])
         xyz[others[0]], xyz[others[1]] = A, B
         face_artists[(face_axis, end)] = ax3d.plot_surface(
-            *xyz, facecolors=face_rgba(norm(face)), shade=False,
-            rstride=1, cstride=1, antialiased=False, linewidth=0, zorder=1,
+            *xyz,
+            facecolors=face_rgba(norm(face)),
+            shade=False,
+            rstride=1,
+            cstride=1,
+            antialiased=False,
+            linewidth=0,
+            zorder=1,
         )
         normal = np.zeros(3)
         normal[i_axis] = -1.0 if end == 0 else 1.0
@@ -185,11 +191,13 @@ def _add_slice_context(ax3d, source, slice_axis: str, colormap: str):
 
     def cull_back_faces() -> bool:
         azim, elev = np.deg2rad(ax3d.azim), np.deg2rad(ax3d.elev)
-        toward_camera = np.array([
-            np.cos(elev) * np.cos(azim),
-            np.cos(elev) * np.sin(azim),
-            np.sin(elev),
-        ])
+        toward_camera = np.array(
+            [
+                np.cos(elev) * np.cos(azim),
+                np.cos(elev) * np.sin(azim),
+                np.sin(elev),
+            ]
+        )
         changed = False
         for key, artist in face_artists.items():
             visible = float(face_normals[key] @ toward_camera) > 0
@@ -221,17 +229,21 @@ def _add_slice_context(ax3d, source, slice_axis: str, colormap: str):
             xyz[axis_index] = np.full_like(U2, along[slice_index])
             xyz[plane_axes[0]], xyz[plane_axes[1]] = U2, V2
             marker_artists.append(
-                ax3d.plot_surface(*xyz, color=deep_red, shade=False,
-                                  antialiased=False, linewidth=0, zorder=10)
+                ax3d.plot_surface(
+                    *xyz,
+                    color=deep_red,
+                    shade=False,
+                    antialiased=False,
+                    linewidth=0,
+                    zorder=10,
+                )
             )
         ring_u = [u_lo, u_hi, u_hi, u_lo, u_lo]
         ring_v = [v_lo, v_lo, v_hi, v_hi, v_lo]
         xyz = [None, None, None]
         xyz[axis_index] = [along[slice_index]] * 5
         xyz[plane_axes[0]], xyz[plane_axes[1]] = ring_u, ring_v
-        marker_artists.append(
-            ax3d.plot(*xyz, color="darkred", lw=2.5, zorder=11)[0]
-        )
+        marker_artists.append(ax3d.plot(*xyz, color="darkred", lw=2.5, zorder=11)[0])
 
     cull_back_faces()
     return draw_marker, cull_back_faces
@@ -270,8 +282,7 @@ def _radial_power_spectrum(
     power[..., doubled] *= 2.0
 
     freqs = [
-        np.fft.fftfreq(n, d=d) * 2 * np.pi
-        for n, d in zip(shape[:-1], deltas[:-1])
+        np.fft.fftfreq(n, d=d) * 2 * np.pi for n, d in zip(shape[:-1], deltas[:-1])
     ]
     freqs.append(np.fft.rfftfreq(n_last, d=deltas[-1]) * 2 * np.pi)
 
@@ -297,18 +308,14 @@ def _radial_power_spectrum(
     valid = indices < num_bins
     indices = indices[valid]
 
-    binned = np.bincount(
-        indices, weights=power.ravel()[valid], minlength=num_bins
-    )
+    binned = np.bincount(indices, weights=power.ravel()[valid], minlength=num_bins)
     if normalize:
         pair_weights = np.ones(shape[:-1] + (power.shape[-1],))
         pair_weights[..., doubled] = 2.0
         counts = np.bincount(
             indices, weights=pair_weights.ravel()[valid], minlength=num_bins
         )
-        binned = np.divide(
-            binned, counts, out=np.zeros_like(binned), where=counts > 0
-        )
+        binned = np.divide(binned, counts, out=np.zeros_like(binned), where=counts > 0)
     return k_centers, binned
 
 
@@ -333,7 +340,8 @@ def fft_power_iso(
 
     Returns:
         Tuple of (k, power) where:
-            - k: 1D array of wavenumber values (in units of 2π/L)
+            - k: Radial bin centers in angular wavenumber (2π times spatial
+              frequency), for all supported dimensions.
             - power: 1D array of power spectral density at each k (float64
               regardless of input dtype)
     """
@@ -368,7 +376,7 @@ def fft_power_1d_slices(
 
     Returns:
         Tuple of (k, power_mean, power_std_lower, power_std_upper) where:
-            - k: 1D array of wavenumber values (in units of 2π/L)
+            - k: Angular wavenumbers, 2π times spatial frequency
             - power_mean: 1D array of geometric mean power at each k
             - power_std_lower: 1D array of geometric mean / multiplicative std
             - power_std_upper: 1D array of geometric mean × multiplicative std
@@ -415,9 +423,7 @@ def fft_power_1d_slices(
     # Move FFT axis to the end and collapse the remaining dims into "slices";
     # float64 so the naive variance below doesn't lose precision.
     power = np.moveaxis(power, axis, -1)
-    power_spectra = power.reshape(-1, power.shape[-1]).astype(
-        np.float64, copy=False
-    )
+    power_spectra = power.reshape(-1, power.shape[-1]).astype(np.float64, copy=False)
 
     # Geometric statistics in log space, computed only over positive entries
     # per bin. Bins where every slice has zero power return 0 for mean/lo/hi
@@ -642,9 +648,7 @@ class Data(BaseProperties):
         # the file's first axis is the logical last axis after the transpose
         n = shape[-1]
         step = chunks[0] if chunks else 1
-        row_bytes = (
-            int(np.prod(shape[:-1])) * np.dtype(dtype).itemsize
-        )
+        row_bytes = int(np.prod(shape[:-1])) * np.dtype(dtype).itemsize
         rows = max(1, _LAZY_SLAB_BYTES // max(row_bytes, 1))
         rows = max(step, (rows // step) * step)
         if n <= rows:
@@ -660,10 +664,7 @@ class Data(BaseProperties):
             int(np.prod(self._get_data_shape()))
             * np.dtype(self._get_data_dtype()).itemsize
         )
-        return (
-            nbytes >= _parallel.SINGLE_FILE_MIN_BYTES
-            and _parallel.spawn_is_safe()
-        )
+        return nbytes >= _parallel.SINGLE_FILE_MIN_BYTES and _parallel.spawn_is_safe()
 
     def _get_data_shape(self) -> Tuple[int, ...]:
         """Retrieve the shape of the data without loading it."""
@@ -696,9 +697,7 @@ class Data(BaseProperties):
             dtype = self._get_data_dtype()
             edges = self._lazy_slab_edges(shape, dtype)
             if edges is None:
-                return da.from_delayed(
-                    delayed(loader)(), shape=shape, dtype=dtype
-                )
+                return da.from_delayed(delayed(loader)(), shape=shape, dtype=dtype)
             parts = []
             for start, stop in edges:
 
@@ -979,9 +978,7 @@ class Data(BaseProperties):
         out = kwargs.get("out")
         if out is not None:
             if any(isinstance(target, Data) for target in out):
-                raise TypeError(
-                    "out= targets must be plain arrays, not Data objects."
-                )
+                raise TypeError("out= targets must be plain arrays, not Data objects.")
             return ufunc(*raw_inputs, **kwargs)
 
         # Execute the ufunc on the underlying arrays
@@ -1175,14 +1172,13 @@ class Data(BaseProperties):
         """
         Compute the FFT power spectrum of the data.
 
-        Computes the power spectral density as a function of wavenumber k,
-        using the box size as the reference for wavenumber units.
-        For multi-dimensional data, returns the radially-averaged (isotropic)
-        power spectrum.
+        Sum power in radial wavenumber bins without
+        dividing by the number of modes. No mean subtraction or window
+        is applied.
 
         Returns:
             Tuple of (k, power) where:
-                - k: 1D array of wavenumber values (in units of 2π/L where L is box size)
+                - k: Radial bin centers in angular wavenumber
                 - power: 1D array of power spectral density at each k
         """
 
@@ -1280,7 +1276,7 @@ class Data(BaseProperties):
 
         Returns:
             Tuple of (k, power_mean, power_std_lower, power_std_upper) where:
-                - k: 1D array of wavenumber values (in units of 2π/L)
+                - k: Angular wavenumbers, 2π times spatial frequency
                 - power_mean: 1D array of geometric mean power at each k
                 - power_std_lower: 1D array of geometric mean / multiplicative std
                 - power_std_upper: 1D array of geometric mean * multiplicative std
@@ -1593,9 +1589,7 @@ class Data(BaseProperties):
 
             initial_slice = 0
             initial_data_slice = self._read_2d_slice(slice_axis, initial_slice)
-            user_clim = any(
-                key in kwargs for key in ("vmin", "vmax", "norm")
-            )
+            user_clim = any(key in kwargs for key in ("vmin", "vmax", "norm"))
             # imshow instead of pcolormesh: the grid is uniform, and swapping
             # the image data per slider tick is far cheaper than re-rendering
             # a quad mesh
@@ -1609,9 +1603,7 @@ class Data(BaseProperties):
                 **kwargs,
             )
 
-            initial_position_str = (
-                f"\n{slice_axis} = {axis_coords[initial_slice]:.2f}"
-            )
+            initial_position_str = f"\n{slice_axis} = {axis_coords[initial_slice]:.2f}"
             ax.set_title(
                 title if title else f"{self._plot_title}{initial_position_str}"
             )
@@ -1655,9 +1647,7 @@ class Data(BaseProperties):
                 # colorbar reflects what is being shown, unless the caller
                 # fixed the limits.
                 if not user_clim:
-                    mesh.set_clim(
-                        float(data_slice.min()), float(data_slice.max())
-                    )
+                    mesh.set_clim(float(data_slice.min()), float(data_slice.max()))
                 if draw_marker is not None:
                     draw_marker(slice_index)
                 fig.canvas.draw_idle()

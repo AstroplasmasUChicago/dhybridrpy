@@ -1,7 +1,15 @@
 site_name: dhybridrpy
-site_description: A Python package to easily load and plot data from dHybridR simulations
+site_description: Read and plot dHybridR simulation output in Python.
 site_author: Bricker Ostler, Miha Cernetic
 site_url: https://dhybridrpy.readthedocs.io/
+
+validation:
+  nav:
+    omitted_files: warn
+  links:
+    not_found: warn
+    anchors: warn
+    unrecognized_links: warn
 
 repo_name: AstroplasmasUChicago/dhybridrpy
 repo_url: https://github.com/AstroplasmasUChicago/dhybridrpy
@@ -71,7 +79,11 @@ nav:
     - Timestep: api/timestep.md
     - Data Classes: api/data.md
     - Tracks: api/tracks.md
-  - Examples: examples.md
+  - Examples:
+    - Overview: examples.md
+    - Magnetic magnitude and profile: examples/magnetic-field.md
+    - Field history: examples/time-history.md
+    - Power spectra: examples/spectra.md
 
 extra_javascript:
   - https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js

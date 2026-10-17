@@ -1,39 +1,24 @@
 # Installation
 
-## Requirements
-
-- Python 3.9 or higher
-- pip package manager
-
-## Install from PyPI
-
-The recommended way to install dhybridrpy is via pip:
+Requires Python 3.9 or later.
 
 ```bash
 pip install dhybridrpy
 ```
 
-## Install from Source
+This installs the Python package, its dependencies, and the `dplot` command.
+For MP4 output, also install [FFmpeg](https://ffmpeg.org/) and make `ffmpeg`
+available on your `PATH`.
 
-To install the latest development version from GitHub:
+## Install from source
+
+A source checkout includes sample simulation output and an example notebook:
 
 ```bash
 git clone https://github.com/AstroplasmasUChicago/dhybridrpy.git
 cd dhybridrpy
-pip install -e .
+pip install .
 ```
 
-## Dependencies
-
-dhybridrpy depends on the following packages, which are automatically installed:
-
-| Package | Purpose |
-|---------|--------|
-| `h5py` | Reading HDF5 simulation output files |
-| `numpy` | Numerical array operations |
-| `matplotlib` | Plotting and visualization |
-| `dask` | Lazy loading for large datasets |
-| `f90nml` | Parsing Fortran namelist input files |
-| `typer` | Command-line interface for the `dplot` tool |
-| `joblib` | Parallel rendering in the `dplot` tool |
-
+To use the sample data, open `examples/examples.ipynb` and run its cells
+with `examples/` as the working directory.

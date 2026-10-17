@@ -1,153 +1,80 @@
 # Lazy Loading
 
-For large simulations with many timesteps or high-resolution data, dhybridrpy supports lazy loading through [Dask](https://dask.org/). This allows you to work with datasets that don't fit in memory.
-
-## Enabling Lazy Loading
-
-Enable lazy loading when initializing DHybridrpy:
+Use `lazy=True` to work with Dask arrays. You can reduce a large field or
+select a region before loading the result into memory:
 
 ```python
 from dhybridrpy import DHybridrpy
 
-dpy = DHybridrpy(
-    input_file="path/to/input",
-    output_folder="path/to/Output",
-    lazy=True  # Enable lazy loading
-)
+dpy = DHybridrpy("path/to/input", "path/to/Output", lazy=True)
+Bx = dpy.timestep_index(0).fields.Bx()
+values = Bx.data  # Dask array; field values are not read yet
+maximum = values.max().compute()  # Read the field and return one number
 ```
 
-## How It Works
+Metadata is read as needed. Array values are read when you call `.compute()`
+or use a method that needs them. Calling `values.compute()` loads the full
+NumPy array, which must fit in memory.
 
-With lazy loading enabled:
+## Combine Calculations
 
-1. **Metadata is loaded immediately** - File paths, shapes, and dtypes are read
-2. **Data is loaded on-demand** - Actual array data is only loaded when needed
-3. **Operations are deferred** - Computations are built up as a task graph
-4. **Execution happens on `.compute()`** - The actual computation runs when you request results
-
-## Working with Lazy Arrays
-
-### Checking Array Type
+Compute related reductions together so they can share file reads:
 
 ```python
-Bx = dpy.timestep(1).fields.Bx()
-
-# Check if it's a Dask array
-import dask.array as da
-print(isinstance(Bx.data, da.Array))  # True if lazy=True
-```
-
-### Explicit Computation
-
-```python
-# Get the lazy array
-Bx = dpy.timestep(1).fields.Bx()
-print(type(Bx.data))  # dask.array.Array
-
-# Compute to get a NumPy array
-data_numpy = Bx.data.compute()
-print(type(data_numpy))  # numpy.ndarray
-```
-
-### Deferred Operations
-
-```python
-import numpy as np
-
-# Build up a computation (no data loaded yet)
-Bx = dpy.timestep(1).fields.Bx()
-By = dpy.timestep(1).fields.By()
-Bz = dpy.timestep(1).fields.Bz()
-
-# This creates a task graph, not actual data
-B_mag = np.sqrt(Bx.data**2 + By.data**2 + Bz.data**2)
-
-# Now compute the result
-result = B_mag.compute()
-```
-
-## Plotting with Lazy Data
-
-The `plot()` method automatically handles lazy arrays:
-
-```python
-# This works seamlessly - data is computed when needed
-Bx = dpy.timestep(1).fields.Bx()
-Bx.plot()  # Automatically calls .compute() internally
-plt.show()
-```
-
-## Memory Efficiency
-
-### Processing Many Timesteps
-
-```python
-import numpy as np
-
-# With lazy loading, this doesn't load all data into memory
-max_values = []
-for ts in dpy.timesteps():
-    Bx = dpy.timestep(ts).fields.Bx()
-    # Only loads data when .compute() is called
-    max_val = Bx.data.max().compute()
-    max_values.append(max_val)
-```
-
-### Chunk Structure
-
-dhybridrpy splits large lazy arrays into several chunks along the last
-axis, with the chunk size chosen by the library. Each chunk is read from
-the file separately, so slicing a lazy array reads only the chunks the
-slice touches:
-
-```python
-Bx = dpy.timestep(1).fields.Bx()
-
-# View chunk structure: one entry per axis, listing chunk sizes.
-# Only the last axis is split, e.g. for a (512, 512, 512) volume:
-print(Bx.data.chunks)
-# ((512,), (512,), (64, 64, 64, 64, 64, 64, 64, 64))
-
-# Only the chunks covering this slab are read
-subset = Bx.data[:, :, 100:200].compute()
-```
-
-Small arrays are a single chunk.
-
-## Performance Tips
-
-### Minimize Compute Calls
-
-```python
-# Less efficient: multiple compute calls
-mean_val = Bx.data.mean().compute()
-std_val = Bx.data.std().compute()
-
-# More efficient: single compute call
 import dask
-mean_val, std_val = dask.compute(Bx.data.mean(), Bx.data.std())
+import numpy as np
+
+ts = dpy.timestep_index(0)
+bx = ts.fields.Bx().data
+by = ts.fields.By().data
+B_xy = np.sqrt(bx**2 + by**2)
+mean, maximum = dask.compute(B_xy.mean(), B_xy.max())
 ```
 
-### Consider Memory vs. Speed Trade-offs
+Arithmetic stays deferred until computation. Reuse the same Dask array
+in related calculations; separate `.compute()` calls can reread the files.
 
-Lazy loading reduces memory usage but may be slower for small datasets due to the overhead of building task graphs.
+## Read a Region
 
-## Raw Data with Lazy Loading
-
-Raw particle data also supports lazy loading:
+Slice before computing to read only the chunks that intersect the selection:
 
 ```python
-raw = dpy.timestep(1).raw_files.raw(species=1)
-
-# Dictionary of lazy arrays
-data_dict = raw.dict
-
-# Compute specific quantities
-positions_x = data_dict['x1'].compute()
-
-# Or index a single dataset directly
-positions_x = raw['x1'].compute()
+print(values.chunks)
+subset = values[..., :8].compute()  # First eight bins of the last axis
 ```
 
-Note that `raw.load()` reads eagerly and raises an error in lazy mode;
-use `raw.dict` or indexing instead.
+Large field and phase arrays are chunked along the last array axis. A slice
+along another axis may touch every chunk; small arrays use one chunk, so
+any slice reads the whole array.
+
+Use `crop()` when you also need the selected region's coordinates or plotting
+methods. It follows the same chunk limits:
+
+```python
+center = Bx.crop(x_range=(0.25, 0.75))
+center_max = center.data.max().compute()
+```
+
+## Methods That Read Immediately
+
+| Method | What is read |
+|--------|--------------|
+| `plot()` | The displayed data; 3D plots read the slice and, when shown, the cube's outer faces |
+| `avg_1d()`, `fft_power()`, `fft_power_1d()` | The full input array |
+| `field_timeseries()`, `phase_timeseries()` | Each selected array, even with `lazy=True` |
+
+For time series, use `apply` to return a small result from each worker
+([example](working-with-data.md#read-across-timesteps)).
+
+## Raw Particle Data
+
+Raw datasets also support deferred reductions:
+
+```python
+raw = dpy.timestep(dpy.raw_timesteps()[0]).raw_files.raw(species=1)
+mean_vx = raw["v1"].mean().compute()
+```
+
+Each raw dataset is one chunk, so computing even a slice reads the entire
+dataset. `raw.dict` returns lazy arrays for all datasets. `raw.load()`
+requires `lazy=False`.

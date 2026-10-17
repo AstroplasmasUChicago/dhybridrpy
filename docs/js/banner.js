@@ -12,7 +12,8 @@ let S = 1; // scale factor
 const QM_RATIO = 1.0;
 const B0 = 5;
 const E = { x: 0, y: 0, z: 0 };
-const DT = 0.012;
+const DT = 0.024;
+const PHYSICS_STEP_MS = 1000 / 30;
 
 // ---------- Perspective ----------
 const FOV = 200;
@@ -21,8 +22,8 @@ const FOV = 200;
 const TEXT_Z = 0; // text sits at z = 0
 
 // ---------- Tunables ----------
-const TRAIL_LIFE = 80;
-const SMOOTHING = 0.1;
+const TRAIL_LIFE = 40;
+const SMOOTHING = 0.19;
 const NUM_PARTICLES = 1;
 
 let rL = 0.5;
@@ -30,6 +31,8 @@ let vPar = 0.5;
 
 // ---------- State ----------
 let particles = [];
+let bannerReady = false;
+let physicsElapsed = 0;
 let useTrail = true;
 let bhatSmooth = { x: Math.cos(Math.PI / 4), y: Math.sin(Math.PI / 4), z: 0 };
 
@@ -83,6 +86,7 @@ function sizeCanvas() {
 
 function initPhysics() {
   particles = [];
+  physicsElapsed = 0;
   for (let i = 0; i < NUM_PARTICLES; i++) {
     const offsetX = (i / NUM_PARTICLES) * W;
     const offsetY = getLineY() + rL + (i - (NUM_PARTICLES - 1) / 2) * 20 * S;
@@ -91,22 +95,33 @@ function initPhysics() {
       vel: { x: vPar, y: 0, z: rL * QM_RATIO * B0 },
       trail: []
     };
+    p.previousPos = { ...p.pos };
     particles.push(p);
   }
 }
 
 function setup() {
+  if (!document.getElementById("p5-banner")) {
+    noCanvas();
+    noLoop();
+    return;
+  }
+
   sizeCanvas();
   const canvas = createCanvas(W, H);
   canvas.parent("p5-banner");
+  frameRate(Infinity); // Draw on every browser animation frame.
   pixelDensity(2);
   textFont("system-ui");
 
   detectTheme();
   initPhysics();
+  bannerReady = true;
 }
 
 function windowResized() {
+  if (!bannerReady) return;
+
   const oldW = W;
   sizeCanvas();
   resizeCanvas(W, H);
@@ -116,24 +131,49 @@ function windowResized() {
     for (const pt of particles) {
       pt.pos.x *= r;
       pt.pos.y *= r;
+      pt.previousPos.x *= r;
+      pt.previousPos.y *= r;
     }
   }
 }
 
 function draw() {
+  if (!bannerReady) return;
+
   clear();
   detectTheme();
 
-  const bhat = getBhat();
-
-  for (const pt of particles) {
-    borisStep(pt, bhat);
-    wrapParticle(pt);
-    updateTrail(pt);
+  let bhat = bhatSmooth;
+  // Limit catch-up after a tab has been suspended.
+  physicsElapsed += Math.min(deltaTime, 100);
+  while (physicsElapsed >= PHYSICS_STEP_MS) {
+    bhat = getBhat();
+    for (const pt of particles) {
+      pt.previousPos = { ...pt.pos };
+      borisStep(pt, bhat);
+      wrapParticle(pt);
+      updateTrail(pt);
+    }
+    physicsElapsed -= PHYSICS_STEP_MS;
   }
 
+  // Interpolate the particle and trail endpoint between Boris updates.
+  const fraction = physicsElapsed / PHYSICS_STEP_MS;
+  const rendered = particles.map(pt => {
+    const pos = {
+      x: lerp(pt.previousPos.x, pt.pos.x, fraction),
+      y: lerp(pt.previousPos.y, pt.pos.y, fraction),
+      z: lerp(pt.previousPos.z, pt.pos.z, fraction)
+    };
+    return {
+      ...pt,
+      pos,
+      trail: [...pt.trail.slice(0, -1), { ...pos, age: 0 }]
+    };
+  });
+
   // Behind text (z > TEXT_Z = farther from camera)
-  for (const pt of particles) {
+  for (const pt of rendered) {
     drawTrailLayer(pt, TEXT_Z, Infinity);
     if (pt.pos.z > TEXT_Z) drawParticleDot(pt);
   }
@@ -141,7 +181,7 @@ function draw() {
   drawTitle();
 
   // In front of text (z <= TEXT_Z)
-  for (const pt of particles) {
+  for (const pt of rendered) {
     drawTrailLayer(pt, -Infinity, TEXT_Z);
     if (pt.pos.z <= TEXT_Z) drawParticleDot(pt);
   }
@@ -231,6 +271,7 @@ function wrapParticle(pt) {
 
   // Break trail so we don't draw a diagonal across the banner
   if (wrapped && useTrail) pt.trail.push(null);
+  if (wrapped) pt.previousPos = { ...pt.pos };
 }
 
 function updateTrail(pt) {
@@ -371,8 +412,9 @@ function borisStep(pt, bhat) {
   pt.vel.y = vPlus.y + QM_RATIO * E.y * DT * 0.5;
   pt.vel.z = vPlus.z + QM_RATIO * E.z * DT * 0.5;
 
-  pt.pos.x += pt.vel.x;
-  pt.pos.y += pt.vel.y;
-  pt.pos.z += pt.vel.z;
+  // Velocities use pixels per 0.012 step; scale displacement with DT.
+  const stepScale = DT / 0.012;
+  pt.pos.x += pt.vel.x * stepScale;
+  pt.pos.y += pt.vel.y * stepScale;
+  pt.pos.z += pt.vel.z * stepScale;
 }
-

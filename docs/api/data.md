@@ -1,755 +1,244 @@
-# Data Classes
+# Data classes
 
-This page documents the data classes: `Field`, `Phase`, and `Raw`.
-
-## Field
-
-Represents electromagnetic field data (B, E, J) on the simulation grid. Obtained
-via `dpy.timestep(ts).fields.<name>(type=...)` (see [Timestep](timestep.md)).
-
-### Attributes
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `file_path` | `str` | Path to the HDF5 file |
-| `name` | `str` | Field name (e.g., "Bx", "Ey") |
-| `timestep` | `int` | Timestep number |
-| `time` | `float` | Simulation time (usually computed as `timestep * dt`; see [How Times Are Determined](dhybridrpy.md#how-times-are-determined)) |
-| `lazy` | `bool` | Whether lazy loading is enabled |
-| `type` | `str` | Field type: "Total", "External", or "Self" |
-
-### Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `data` | `ndarray` or `dask.Array` | The field data array |
-| `xdata` | `ndarray` or `dask.Array` | X-coordinate values |
-| `ydata` | `ndarray` or `dask.Array` | Y-coordinate values (2D/3D) |
-| `zdata` | `ndarray` or `dask.Array` | Z-coordinate values (3D) |
-| `xlimdata` | `ndarray` | X-axis limits [xmin, xmax] |
-| `ylimdata` | `ndarray` | Y-axis limits [ymin, ymax] |
-| `zlimdata` | `ndarray` | Z-axis limits [zmin, zmax] |
-
-### Example
-
-```python
-Bx = dpy.timestep(1).fields.Bx()
-
-print(Bx.name)       # "Bx"
-print(Bx.type)       # "Total"
-print(Bx.timestep)   # 1
-print(Bx.time)       # e.g., 10.0
-print(Bx.data.shape) # e.g., (256, 128)
-```
-
----
-
-## Phase
-
-Represents phase space data (charge density diagrams such as `x2x1` or `etx1`,
-and fluid quantities). See
-[Phase Data](../user-guide/working-with-data.md#phase-data) for what each
-diagram name means. Obtained
-via `dpy.timestep(ts).phases.<name>(species=...)` (see [Timestep](timestep.md)).
-
-### Attributes
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `file_path` | `str` | Path to the HDF5 file |
-| `name` | `str` | Phase name (e.g., "x2x1", "Vx") |
-| `timestep` | `int` | Timestep number |
-| `time` | `float` | Simulation time (usually computed as `timestep * dt`; see [How Times Are Determined](dhybridrpy.md#how-times-are-determined)) |
-| `lazy` | `bool` | Whether lazy loading is enabled |
-| `species` | `int` or `str` | Species identifier (1, 2, ... or "Total") |
-
-### Properties
-
-Same as Field: `data`, `xdata`, `ydata`, `zdata`, `xlimdata`, `ylimdata`, `zlimdata`
-
-### Example
-
-```python
-phase = dpy.timestep(1).phases.x2x1(species=1)
-
-print(phase.name)      # "x2x1"
-print(phase.species)   # 1
-print(phase.data.shape) # e.g., (128, 128)
-```
-
----
-
-## Raw
-
-Represents raw particle data. Obtained via
-`dpy.timestep(ts).raw_files.raw(species=...)` (see [Timestep](timestep.md)).
-
-### Attributes
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `file_path` | `str` | Path to the HDF5 file |
-| `name` | `str` | Always "raw" |
-| `timestep` | `int` | Timestep number |
-| `time` | `float` | Simulation time (usually computed as `timestep * dt`; see [How Times Are Determined](dhybridrpy.md#how-times-are-determined)) |
-| `lazy` | `bool` | Whether lazy loading is enabled |
-| `species` | `int` | Species number |
-
-### Properties and Methods
-
-| Name | Description |
-|------|-------------|
-| `dict` | Dictionary of all raw data arrays (reads every dataset) |
-| `keys()` | Dataset names without reading any data |
-| `raw[key]` | Read one dataset, e.g. `raw["v1"]` |
-| `key in raw` | Whether a dataset exists |
-| `load(keys=None, workers=None)` | Read several datasets at once. Faster than `dict` or a loop over keys because the reads run in parallel worker processes (eager only) |
-
-### Example
-
-```python
-raw = dpy.timestep(1).raw_files.raw(species=1)
-
-print(raw.keys())  # e.g., ['x1', 'x2', 'x3', 'v1', 'v2', 'v3']
-
-# One dataset without reading the rest. The v datasets are regular
-# velocities in units of the Alfven speed.
-vx = raw["v1"]
-
-# Several datasets, read by parallel worker processes
-positions = raw.load(keys=["x1", "x2", "x3"])
-```
-
----
-
-## Arithmetic Operations
-
-Both `Field` and `Phase` support arithmetic operations:
-
-### Binary Operations
-
-```python
-Bx = dpy.timestep(1).fields.Bx()
-By = dpy.timestep(1).fields.By()
-
-# Addition
-B_sum = Bx + By
-
-# Subtraction
-B_diff = Bx - By
-
-# Multiplication
-B_scaled = Bx * 2.0
-B_product = Bx * By
-
-# Division
-B_ratio = Bx / By
-
-# Power
-Bx_squared = Bx ** 2
-```
-
-### NumPy Ufuncs
+`Field` and `Phase` share the array, analysis, and plotting API below.
+Examples use a [Timestep](timestep.md) named `ts` and a `Field` named `obj`:
 
 ```python
 import numpy as np
 
-Bx = dpy.timestep(1).fields.Bx()
-
-# NumPy functions work directly
-B_abs = np.abs(Bx)
-B_sin = np.sin(Bx)
-B_exp = np.exp(Bx)
-B_log = np.log(np.abs(Bx) + 1e-10)
-
-# Complex calculations
-Bx = dpy.timestep(1).fields.Bx()
-By = dpy.timestep(1).fields.By()
-Bz = dpy.timestep(1).fields.Bz()
-
-B_magnitude = np.sqrt(Bx**2 + By**2 + Bz**2)
+obj = ts.fields.Bx()
 ```
 
-### Comparisons
+## Field and Phase
 
-Comparisons are elementwise, like every other operator, and return a
-boolean data object:
+| Attribute or property | Value |
+|---|---|
+| `file_path`, `name` | Source HDF5 path and quantity name |
+| `timestep`, `time` | Iteration number and simulation time |
+| `lazy` | Whether array reads use Dask |
+| `type` | `Field` only: `"Total"`, `"External"`, or `"Self"` |
+| `species` | `Phase` only: species number or `"Total"` |
+| `data` | Array in `(nx, ny, nz)` order; unused dimensions omitted |
+| `xdata`, `ydata`, `zdata` | Axis cell centers |
+| `xlimdata`, `ylimdata`, `zlimdata` | Axis boundaries `[low, high]` |
+
+| Behavior | Details |
+|---|---|
+| Array type | NumPy by default; Dask for data and coordinates when `lazy=True`. Limits are always NumPy arrays |
+| Coordinates | Follow the diagnostic axes; `ts.phases.u1x1().ydata` contains proper-velocity bin centers |
+| Repeated reads | File-backed `.data` is not cached; arithmetic and crops retain their result array or Dask graph |
+
+### Arithmetic and comparisons
+
+| Operation | Example |
+|---|---|
+| Arithmetic | `obj + 1`, `obj - 1`, `2 * obj`, `obj / 2`, `obj ** 2`, `-obj` |
+| Two data objects | `obj + ts.fields.By()` |
+| NumPy elementwise functions | `np.sqrt(obj ** 2)` |
+| Comparisons | `obj > 0`, `obj == ts.fields.By()` |
+| Boolean reduction | `(obj > 0).data.any()` |
+
+**Returns:** the same data class with preserved metadata; comparisons contain booleans.
+
+**Requirements:** two objects must match in class, shape, iteration, and field type or species. Coordinates are not checked.
+
+Use `.data` for multi-output NumPy functions. Data objects cannot be used as `if` conditions.
+
+### crop
+
+```text
+crop(x_range=None, y_range=None, z_range=None) -> Field | Phase
+```
+
+| Item | Meaning |
+|---|---|
+| Each range | Fractional bounds `(low, high)` with `0 <= low < high <= 1`; `None` keeps the whole axis |
+| Cell selection | Bounds rounded to indices; at least one cell retained |
+| Returns | Same data class, with updated coordinates and limits |
+| Reads | Eager: full source array. Lazy: intersecting chunks when computed |
 
 ```python
-mask = density > 1.0          # boolean data object
-frac = np.mean(mask.data)     # fraction of cells above the threshold
+center = obj.crop(x_range=(0.2, 0.8))  # For 10 x cells, keep indices 2–7
 ```
 
-Two consequences match NumPy array behavior:
+## Analysis
 
-- `if a == b:` raises `ValueError`, because the truth value of a whole
-  array is ambiguous. Ask `np.all(np.equal(a, b).data)` for "all values
-  equal", or `a is b` for "the same object".
-- Data objects cannot be dictionary keys or set members.
+All methods accept 1D, 2D, or 3D data, load the full selection, and return
+NumPy arrays. `direction` selects an existing axis: `"x"`, `"y"`, or `"z"`.
 
-One deliberately differs: comparing against `None` returns plain
-`False` instead of an elementwise array, so `field == None` behaves
-like an identity check.
-
-### Compatibility Requirements
-
-Operations between data objects require:
-
-1. **Same shape**: Grid dimensions must match
-2. **Same timestep**: Data must be from the same timestep
-3. **Same type** (for Fields): Field types must match
-4. **Same species** (for Phases): Species must match
+### avg_1d
 
 ```python
-# This works
-Bx = dpy.timestep(1).fields.Bx(type="Total")
-By = dpy.timestep(1).fields.By(type="Total")
-result = Bx + By
-
-# This raises ValueError (different types)
-Bx_total = dpy.timestep(1).fields.Bx(type="Total")
-Bx_ext = dpy.timestep(1).fields.Bx(type="External")
-# result = Bx_total + Bx_ext  # Error!
+coords, mean, lower, upper = obj.avg_1d(direction="x")
 ```
 
----
+| Return | Meaning |
+|---|---|
+| `coords` | Cell centers along `direction` |
+| `mean` | Arithmetic mean over all other axes |
+| `lower`, `upper` | `mean - std`, `mean + std`, using population standard deviation |
 
-## Cropping
+For shape `(4, 3)`, `direction="x"` returns four means over three cells each.
+For 1D data, `mean`, `lower`, and `upper` equal the original data.
 
-Both `Field` and `Phase` have a `crop()` method that returns a new
-object restricted to a sub-region of the box.
+### Spectra
 
-### Method Signature
+Both methods return angular wavenumbers in inverse coordinate units and float64 power. Neither subtracts
+the mean or applies a window. Axis lengths come from the object's boundary limits.
+
+#### fft_power
 
 ```python
-def crop(
-    self,
-    x_range: Optional[Tuple[float, float]] = None,
-    y_range: Optional[Tuple[float, float]] = None,
-    z_range: Optional[Tuple[float, float]] = None,
-) -> "Data"
+k, power = obj.fft_power()
 ```
 
-### Parameters
+| Return | Meaning |
+|---|---|
+| `k` | Radial bin centers, spaced by `2*pi / max(axis_lengths)` |
+| `power` | FFT power summed within each radial bin |
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `x_range` | `tuple` | `None` | (low, high) fraction of the box to keep along x |
-| `y_range` | `tuple` | `None` | (low, high) fraction of the box to keep along y |
-| `z_range` | `tuple` | `None` | (low, high) fraction of the box to keep along z |
+For per-mode averages, use [`fft_power_iso(normalize=True)`](#fft_power_iso).
 
-Each range is a pair of fractions between 0 and 1, where 0 is the start
-of the box and 1 is the end. Axes left as `None` are kept whole. A range
-with `low >= high` or values outside [0, 1] raises `ValueError`.
-
-### Returns
-
-A new instance of the same class holding a copy of the cropped region.
-Axis coordinates and limits are adjusted to match, so plotting, FFT, and
-averaging methods work on the cropped object. Crops can be chained; the
-adjusted coordinates from earlier calls are kept.
-
-### Example
+#### fft_power_1d
 
 ```python
-Bx = dpy.timestep(1).fields.Bx()
-
-# Keep the middle half of the box in x, all of y
-Bx_inner = Bx.crop(x_range=(0.25, 0.75))
-
-# Useful for excluding domain-edge artifacts (e.g. absorbing
-# boundaries) from color scales and statistics
-Bx_inner.plot()
+k, mean, lower, upper = obj.fft_power_1d(direction="x")
 ```
 
----
+One FFT along `direction` at each perpendicular position; statistics across those spectra:
+
+| Return | Meaning |
+|---|---|
+| `k` | Wavenumbers starting at zero, spaced by `2*pi / axis_length` |
+| `mean` | Geometric mean power: `exp(mean(log(power)))` |
+| `lower`, `upper` | `exp(mean(log(power)) ± std(log(power)))` |
+
+Zero-power entries are excluded from the statistics; bins with no positive power return zeros.
 
 ## Plotting
 
-Both `Field` and `Phase` have a `plot()` method:
+### plot
 
-### Method Signature
-
-```python
-def plot(
-    self,
-    *,
-    ax: Optional[Axes] = None,
-    dpi: int = 100,
-    title: Optional[str] = None,
-    xlabel: Optional[str] = None,
-    ylabel: Optional[str] = None,
-    zlabel: Optional[str] = None,
-    xlim: Optional[tuple] = None,
-    ylim: Optional[tuple] = None,
-    zlim: Optional[tuple] = None,
-    colormap: str = "viridis",
-    show_colorbar: bool = True,
-    colorbar_label: Optional[str] = None,
-    slice_axis: Literal["x", "y", "z"] = "x",
-    context_3d: bool = True,
-    **kwargs
-) -> Tuple[Axes, Union[Line2D, AxesImage]]
+```text
+plot(*, ax=None, dpi=100, title=None,
+     xlabel=None, ylabel=None, zlabel=None,
+     xlim=None, ylim=None, zlim=None,
+     colormap="viridis", show_colorbar=True, colorbar_label=None,
+     slice_axis="x", context_3d=True, **kwargs)
 ```
 
-### Parameters
+| Data | Plot | Returns |
+|---|---|---|
+| 1D | Line | `(Axes, Line2D)` |
+| 2D | Image | `(Axes, AxesImage)` |
+| 3D | Interactive slice | `(Axes, AxesImage)` for the slice panel |
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `ax` | `Axes` | `None` | Matplotlib Axes (creates new if None) |
-| `dpi` | `int` | `100` | Figure resolution |
-| `title` | `str` | `None` | Plot title (auto-generated if None) |
-| `xlabel` | `str` | `None` | X-axis label |
-| `ylabel` | `str` | `None` | Y-axis label |
-| `zlabel` | `str` | `None` | Z-axis label (3D only) |
-| `xlim` | `tuple` | `None` | X-axis limits |
-| `ylim` | `tuple` | `None` | Y-axis limits |
-| `zlim` | `tuple` | `None` | Z-axis limits (3D only) |
-| `colormap` | `str` | `"viridis"` | Colormap name |
-| `show_colorbar` | `bool` | `True` | Show colorbar |
-| `colorbar_label` | `str` | `None` | Colorbar label |
-| `slice_axis` | `str` | `"x"` | Slice axis for 3D data; step slices with the left/right arrow keys |
-| `context_3d` | `bool` | `True` | For 3D data, add a rotatable cube of the volume's outer faces with a deep-red frame marking the current slice (ignored when `ax` is given) |
-| `**kwargs` | | | Additional matplotlib kwargs |
+| Option | Meaning |
+|---|---|
+| `ax`, `dpi` | Existing axes, or resolution of a new figure |
+| `title` | Override the quantity/time title |
+| `xlabel`, `ylabel`, `zlabel` | Labels for the corresponding coordinates |
+| `xlim`, `ylim`, `zlim` | Limits for the corresponding coordinates |
+| `colormap` | Image colormap |
+| `show_colorbar`, `colorbar_label` | Show and label the image colorbar |
+| `slice_axis` | `"x"`: yz plane; `"y"`: xz plane; `"z"`: xy plane |
+| `context_3d` | Rotatable volume view; ignored when `ax` is supplied |
+| `**kwargs` | Matplotlib `plot` (1D) or `imshow` (2D/3D) options |
 
-### Returns
-
-- `Axes`: The matplotlib Axes object (for 3D data, the slice panel)
-- `Line2D` or `AxesImage`: The plot object (2D data and 3D slices are drawn with imshow)
-
-### Example
+- **1D labels and limits:** set the y-axis with `ax.set_ylabel(...)` and `ax.set_ylim(...)`.
+- **3D controls:** slider and left/right arrows; requires an [interactive backend](../user-guide/plotting.md).
+- **3D color limits:** rescale per slice unless fixed with `vmin`, `vmax`, or `norm`.
 
 ```python
-import matplotlib.pyplot as plt
-
-Bx = dpy.timestep(1).fields.Bx()
-
-ax, mesh = Bx.plot(
-    colormap="RdBu",
-    title="Magnetic Field Bx",
-    show_colorbar=True
-)
-
-plt.savefig("Bx.png")
-plt.show()
+ax, artist = obj.plot(colormap="RdBu_r", vmin=-1, vmax=1)  # 2D or 3D
 ```
 
----
+### Profile and spectrum plots
 
-## 1D Averaging
+**Returns:** `(Axes, Line2D)` for each method. All options except `direction` are keyword-only.
 
-Both `Field` and `Phase` provide methods for computing and plotting 1D averages along a chosen direction.
+| Method | Plots | Options specific to this method |
+|---|---|---|
+| `plot_1d_avg(direction="x", ...)` | [`avg_1d`](#avg_1d) mean and standard-deviation band | Band options below |
+| `plot_fft_power(...)` | [`fft_power`](#fft_power) radial sums | `loglog=True` |
+| `plot_fft_power_1d(direction="x", ...)` | [`fft_power_1d`](#fft_power_1d) geometric mean and band | `loglog=True`; band options below |
 
-### avg_1d Method
+| Keyword option | Default | Meaning |
+|---|---|---|
+| `ax`, `dpi` | `None`, `100` | Existing axes, or resolution of a new figure |
+| `title`, `xlabel`, `ylabel` | `None` | Override automatic text |
+| `xlim`, `ylim` | `None` | Axis limits |
+| `loglog` | `True` | Spectrum methods only; `False` selects linear axes |
+| `**kwargs` | — | Matplotlib line options, such as `label` or `linestyle` |
 
-Computes the mean and standard deviation along a specified direction, averaging over all perpendicular axes.
+**Band options** (`plot_1d_avg` and `plot_fft_power_1d` only):
+
+| Keyword option | Default | Meaning |
+|---|---|---|
+| `show_std`, `fill_alpha` | `True`, `0.3` | Show the band; set its opacity |
+| `fill_color`, `line_color` | `None` | Band and mean-line colors; band defaults to line color |
 
 ```python
-def avg_1d(
-    self,
-    direction: Literal["x", "y", "z"] = "x",
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+ax, line = obj.plot_1d_avg(direction="x", show_std=False)
+ax, line = obj.plot_fft_power(loglog=True)
 ```
 
-#### Parameters
+For velocity or energy profiles, override the default spatial axis label with `xlabel`.
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `direction` | `str` | `"x"` | Direction along which to compute the average ("x", "y", or "z") |
-
-#### Returns
-
-A tuple of four numpy arrays:
-
-| Return Value | Description |
-|--------------|-------------|
-| `coords` | 1D array of coordinates along the specified direction |
-| `mean` | 1D array of mean values |
-| `std_lower` | 1D array of (mean - standard deviation) |
-| `std_upper` | 1D array of (mean + standard deviation) |
-
-#### Example
+## Raw
 
 ```python
-Bx = dpy.timestep(1).fields.Bx()
-
-# Get averaged data for custom analysis
-coords, mean, std_lower, std_upper = Bx.avg_1d("x")
-
-# Use in your own plotting or analysis
-import matplotlib.pyplot as plt
-plt.plot(coords, mean)
-plt.fill_between(coords, std_lower, std_upper, alpha=0.3)
-plt.show()
+raw = ts.raw_files.raw(species=1)
+velocity = raw["v1"]
 ```
 
-### plot_1d_avg Method
+**Attributes:** `file_path`, `name` (`"raw"`), `timestep`, `time`, `lazy`, `species`.
 
-Plots the 1D average with a shaded region showing ±1 standard deviation.
+| Access | Returns |
+|---|---|
+| `raw.keys()` | Dataset names; no array reads |
+| `key in raw` | Whether a dataset exists |
+| `raw[key]` | One NumPy array, or Dask array when lazy |
+| `raw.dict` | Dictionary of all datasets; NumPy or Dask arrays |
+| `raw.load(keys=None, workers=None)` | Dictionary of NumPy arrays read by worker processes |
 
-```python
-def plot_1d_avg(
-    self,
-    direction: Literal["x", "y", "z"] = "x",
-    *,
-    ax: Optional[Axes] = None,
-    dpi: int = 100,
-    title: Optional[str] = None,
-    xlabel: Optional[str] = None,
-    ylabel: Optional[str] = None,
-    xlim: Optional[tuple] = None,
-    ylim: Optional[tuple] = None,
-    fill_alpha: float = 0.3,
-    fill_color: Optional[str] = None,
-    line_color: Optional[str] = None,
-    show_std: bool = True,
-    **kwargs
-) -> Tuple[Axes, Line2D]
+| Detail | Value |
+|---|---|
+| Dataset names | Match the file; `x1`: position, `v1`: ordinary velocity in `v_A`, `q`: signed macroparticle charge weight |
+| Reads | Not cached; missing keys raise `KeyError`; each lazy dataset is one chunk |
+| `load` defaults | All datasets; `min(8, CPU count)` workers |
+| `load` restrictions | `lazy=False`; scripts need the [time-series main guard](dhybridrpy.md#read-across-timesteps) |
+
+## Standalone functions
+
+Import from `dhybridrpy`. Spectrum functions take NumPy arrays.
+
+### fft_power_iso
+
+```text
+fft_power_iso(data, Lx, Ly=None, Lz=None, normalize=False) -> (k, power)
 ```
 
-#### Parameters
+| Parameter | Meaning |
+|---|---|
+| `Lx`, `Ly`, `Lz` | Axis lengths; `Ly` required for 2D/3D, `Lz` for 3D |
+| `normalize` | `False`: radial sums; `True`: divide each bin by its mode count |
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `direction` | `str` | `"x"` | Direction along which to plot ("x", "y", or "z") |
-| `ax` | `Axes` | `None` | Matplotlib Axes (creates new if None) |
-| `dpi` | `int` | `100` | Figure resolution |
-| `title` | `str` | `None` | Plot title (auto-generated if None) |
-| `xlabel` | `str` | `None` | X-axis label |
-| `ylabel` | `str` | `None` | Y-axis label |
-| `xlim` | `tuple` | `None` | X-axis limits |
-| `ylim` | `tuple` | `None` | Y-axis limits |
-| `fill_alpha` | `float` | `0.3` | Transparency of the std deviation fill region |
-| `fill_color` | `str` | `None` | Color for the fill region (defaults to line color) |
-| `line_color` | `str` | `None` | Color for the mean line |
-| `show_std` | `bool` | `True` | Whether to show the standard deviation fill |
-| `**kwargs` | | | Additional matplotlib kwargs for the line plot |
+Returns match [`fft_power`](#fft_power).
 
-#### Returns
+### fft_power_1d_slices
 
-- `Axes`: The matplotlib Axes object
-- `Line2D`: The line plot object
-
-#### Example
-
-```python
-import matplotlib.pyplot as plt
-
-Bx = dpy.timestep(1).fields.Bx()
-
-# Simple usage
-ax, line = Bx.plot_1d_avg("x")
-plt.show()
-
-# Customized plot
-fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-Bx.plot_1d_avg("x", ax=axes[0], fill_alpha=0.2, line_color="blue")
-Bx.plot_1d_avg("y", ax=axes[1], fill_alpha=0.2, line_color="red")
-plt.tight_layout()
-plt.savefig("Bx_averages.png")
+```text
+fft_power_1d_slices(data, L, direction="x") -> (k, mean, lower, upper)
 ```
 
-#### Behavior by Dimension
+**`L`:** length of the chosen axis. Returns match [`fft_power_1d`](#fft_power_1d).
 
-| Data Dimension | Direction | Averaging Axes |
-|----------------|-----------|----------------|
-| 1D | x | None (data returned as-is) |
-| 2D | x | y |
-| 2D | y | x |
-| 3D | x | y, z |
-| 3D | y | x, z |
-| 3D | z | x, y |
+### close_pooled_handles
 
----
-
-## FFT Power Spectrum
-
-Both `Field` and `Phase` provide methods for computing and plotting FFT power spectra.
-
-### fft_power Method
-
-Computes the power spectral density as a function of wavenumber k.
-
-```python
-def fft_power(
-    self,
-) -> Tuple[np.ndarray, np.ndarray]
+```text
+close_pooled_handles() -> None
 ```
 
-#### Returns
-
-A tuple of two numpy arrays:
-
-| Return Value | Description |
-|--------------|-------------|
-| `k` | 1D array of wavenumber values (in units of 2π/L where L is box size) |
-| `power` | 1D array of power spectral density at each k |
-
-#### Behavior by Dimension
-
-| Data Dimension | Method |
-|----------------|--------|
-| 1D | 1D FFT with radial binning |
-| 2D | 2D FFT with radial averaging for isotropic spectrum |
-| 3D | 3D FFT with radial averaging for isotropic spectrum |
-
-#### Example
-
-```python
-Bx = dpy.timestep(1).fields.Bx()
-
-# Get power spectrum data
-k, power = Bx.fft_power()
-
-# Find peak wavenumber
-k_peak = k[np.argmax(power)]
-print(f"Peak power at k = {k_peak:.3f}")
-
-# Custom analysis
-import matplotlib.pyplot as plt
-plt.loglog(k, power)
-plt.axvline(k_peak, color='red', linestyle='--')
-plt.show()
-```
-
-### plot_fft_power Method
-
-Plots the FFT power spectrum.
-
-```python
-def plot_fft_power(
-    self,
-    *,
-    ax: Optional[Axes] = None,
-    dpi: int = 100,
-    title: Optional[str] = None,
-    xlabel: Optional[str] = None,
-    ylabel: Optional[str] = None,
-    xlim: Optional[tuple] = None,
-    ylim: Optional[tuple] = None,
-    loglog: bool = True,
-    **kwargs
-) -> Tuple[Axes, Line2D]
-```
-
-#### Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `ax` | `Axes` | `None` | Matplotlib Axes (creates new if None) |
-| `dpi` | `int` | `100` | Figure resolution |
-| `title` | `str` | `None` | Plot title (auto-generated if None) |
-| `xlabel` | `str` | `None` | X-axis label |
-| `ylabel` | `str` | `None` | Y-axis label |
-| `xlim` | `tuple` | `None` | X-axis limits |
-| `ylim` | `tuple` | `None` | Y-axis limits |
-| `loglog` | `bool` | `True` | Whether to use log-log scale |
-| `**kwargs` | | | Additional matplotlib kwargs for the line plot |
-
-#### Returns
-
-- `Axes`: The matplotlib Axes object
-- `Line2D`: The line plot object
-
-#### Example
-
-```python
-import matplotlib.pyplot as plt
-
-Bx = dpy.timestep(1).fields.Bx()
-
-# Simple usage
-ax, line = Bx.plot_fft_power()
-plt.show()
-
-# Compare multiple fields
-fig, ax = plt.subplots(figsize=(10, 6))
-dpy.timestep(1).fields.Bx().plot_fft_power(ax=ax, label='Bx')
-dpy.timestep(1).fields.By().plot_fft_power(ax=ax, label='By')
-dpy.timestep(1).fields.Bz().plot_fft_power(ax=ax, label='Bz')
-ax.legend()
-plt.savefig("B_power_spectra.png")
-```
-
----
-
-## 1D Slice-Based FFT Power Spectrum
-
-Alternative FFT methods that compute power spectra from 1D slices along a chosen direction, providing statistics across slices.
-
-### fft_power_1d Method
-
-Computes 1D FFT power spectra along a chosen direction, returning mean and standard deviation across all slices.
-
-```python
-def fft_power_1d(
-    self,
-    direction: Literal["x", "y", "z"] = "x",
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
-```
-
-#### Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `direction` | `str` | `"x"` | Direction along which to compute 1D FFTs |
-
-#### Returns
-
-A tuple of four numpy arrays:
-
-| Return Value | Description |
-|--------------|-------------|
-| `k` | 1D array of wavenumber values (in units of 2π/L) |
-| `power_mean` | 1D array of geometric mean power at each k |
-| `power_std_lower` | 1D array of geometric mean / multiplicative std |
-| `power_std_upper` | 1D array of geometric mean × multiplicative std |
-
-Statistics are computed in log space, making the bands symmetric on log-log plots.
-
-#### Example
-
-```python
-Bx = dpy.timestep(1).fields.Bx()
-
-# Get 1D power spectrum statistics along x
-k, power_mean, power_std_lower, power_std_upper = Bx.fft_power_1d("x")
-
-# Compare anisotropy between x and y directions
-k_x, mean_x, _, _ = Bx.fft_power_1d("x")
-k_y, mean_y, _, _ = Bx.fft_power_1d("y")
-
-anisotropy = mean_x / mean_y  # Ratio of power in x vs y direction
-```
-
-### plot_fft_power_1d Method
-
-Plots the 1D FFT power spectrum with standard deviation band.
-
-```python
-def plot_fft_power_1d(
-    self,
-    direction: Literal["x", "y", "z"] = "x",
-    *,
-    ax: Optional[Axes] = None,
-    dpi: int = 100,
-    title: Optional[str] = None,
-    xlabel: Optional[str] = None,
-    ylabel: Optional[str] = None,
-    xlim: Optional[tuple] = None,
-    ylim: Optional[tuple] = None,
-    loglog: bool = True,
-    fill_alpha: float = 0.3,
-    fill_color: Optional[str] = None,
-    line_color: Optional[str] = None,
-    show_std: bool = True,
-    **kwargs
-) -> Tuple[Axes, Line2D]
-```
-
-#### Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `direction` | `str` | `"x"` | Direction along which to compute 1D FFTs |
-| `ax` | `Axes` | `None` | Matplotlib Axes (creates new if None) |
-| `dpi` | `int` | `100` | Figure resolution |
-| `title` | `str` | `None` | Plot title (auto-generated if None) |
-| `xlabel` | `str` | `None` | X-axis label |
-| `ylabel` | `str` | `None` | Y-axis label |
-| `xlim` | `tuple` | `None` | X-axis limits |
-| `ylim` | `tuple` | `None` | Y-axis limits |
-| `loglog` | `bool` | `True` | Whether to use log-log scale |
-| `fill_alpha` | `float` | `0.3` | Transparency of the std deviation fill region |
-| `fill_color` | `str` | `None` | Color for the fill region (defaults to line color) |
-| `line_color` | `str` | `None` | Color for the mean line |
-| `show_std` | `bool` | `True` | Whether to show the standard deviation fill |
-| `**kwargs` | | | Additional matplotlib kwargs for the line plot |
-
-#### Returns
-
-- `Axes`: The matplotlib Axes object
-- `Line2D`: The line plot object
-
-#### Example
-
-```python
-import matplotlib.pyplot as plt
-
-Bx = dpy.timestep(1).fields.Bx()
-
-# Compare power spectra along different directions
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-Bx.plot_fft_power_1d("x", ax=axes[0])
-Bx.plot_fft_power_1d("y", ax=axes[1])
-plt.tight_layout()
-plt.show()
-
-# Compare isotropic vs 1D methods
-fig, ax = plt.subplots(figsize=(10, 6))
-Bx.plot_fft_power(ax=ax, label='Isotropic (2D FFT)', linestyle='--')
-Bx.plot_fft_power_1d("x", ax=ax, label='1D FFT along x')
-Bx.plot_fft_power_1d("y", ax=ax, label='1D FFT along y')
-ax.legend()
-plt.show()
-```
-
-#### When to Use
-
-| Method | Use Case |
-|--------|----------|
-| `fft_power()` | Isotropic turbulence, radially-averaged spectrum |
-| `fft_power_1d()` | Anisotropic systems, direction-dependent analysis |
-
-The standard deviation band in `plot_fft_power_1d` shows the variation in power across different slices, which can reveal spatial inhomogeneity in the turbulence.
-
----
-
-## Module-Level Functions
-
-These functions are importable directly from `dhybridrpy`.
-
-### `fft_power_iso(data, Lx, Ly=None, Lz=None, normalize=False)`
-
-The standalone version of [`fft_power`](#fft_power-method) for plain
-numpy arrays. Computes the isotropic FFT power spectrum of 1D, 2D, or
-3D data. `Ly` is required for 2D/3D data and `Lz` for 3D data. With
-`normalize=True`, each radial shell is divided by its mode count,
-giving the per-mode power instead of the summed shell energy. Returns
-`(k, power)`; power is float64 regardless of the input dtype.
-
-```python
-from dhybridrpy import fft_power_iso
-
-k, power = fft_power_iso(array, Lx=100.0, Ly=50.0)
-```
-
-### `fft_power_1d_slices(data, L, direction="x")`
-
-The standalone version of [`fft_power_1d`](#fft_power_1d-method) for
-plain numpy arrays. Computes a 1D FFT power spectrum for each slice
-along the chosen direction and returns
-`(k, power_mean, power_std_lower, power_std_upper)` with geometric
-statistics across slices. All power arrays are float64 regardless of
-the input dtype.
-
-```python
-from dhybridrpy import fft_power_1d_slices
-
-k, mean, lo, hi = fft_power_1d_slices(array, L=100.0, direction="y")
-```
-
-### `close_pooled_handles()`
-
-Interactive 3D slicing keeps a small pool of open HDF5 handles so
-neighboring slices read without reopening the file. This function
-closes them all. Call it before deleting or re-creating a sliced file
-in the same process: a pooled handle keeps the file open, so opening it
-for writing fails until the handle is released. The pool refills
-automatically on the next slice read.
-
-```python
-from dhybridrpy import close_pooled_handles
-
-close_pooled_handles()
-```
+Close HDF5 handles used for interactive 3D slicing before recreating those files
+in the same process. Subsequent slices reopen handles.

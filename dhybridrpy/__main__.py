@@ -441,7 +441,7 @@ def run(
         None, "--fields", help="Field names to plot (e.g. --fields Bx --fields By)."
     ),
     phases: Optional[List[str]] = typer.Option(
-        None, "--phases", help="Phase names to plot (e.g. --phases p1x1 --phases x2x1)."
+        None, "--phases", help="Phase names to plot (e.g. --phases u1x1 --phases x2x1)."
     ),
     field_type: str = typer.Option(
         "Total", "--type", help="Field type: Total, External, or Self."
@@ -522,8 +522,7 @@ def run(
         field_type = field_type.capitalize()
     if field_type not in ("Total", "External", "Self"):
         typer.echo(
-            f"Error: --type must be Total, External, or Self "
-            f"(got '{field_type}').",
+            f"Error: --type must be Total, External, or Self (got '{field_type}').",
             err=True,
         )
         raise typer.Exit(1)
@@ -558,9 +557,7 @@ def run(
         raise typer.Exit(1)
 
     if len(dpy.timesteps()) == 0:
-        typer.echo(
-            f"Error: no field or phase output found under '{output}'.", err=True
-        )
+        typer.echo(f"Error: no field or phase output found under '{output}'.", err=True)
         raise typer.Exit(1)
 
     first_ts = dpy.timestep(dpy.timesteps()[0])
@@ -587,9 +584,11 @@ def run(
     if fields:
         available = sorted(first_ts._fields_dict.get(field_type, {}).keys())
         for field_name in fields:
-            if field_name.lower() not in _B_DERIVED_NAMES and not hasattr(
-                first_ts.fields, field_name
-            ) and field_name not in available:
+            if (
+                field_name.lower() not in _B_DERIVED_NAMES
+                and not hasattr(first_ts.fields, field_name)
+                and field_name not in available
+            ):
                 typer.echo(
                     f"Error: unknown field '{field_name}' for type "
                     f"{field_type}. Available: {', '.join(available)}",
@@ -644,11 +643,7 @@ def run(
 
         for phase_name in phases:
             known = sorted(
-                {
-                    name
-                    for names in first_ts._phases_dict.values()
-                    for name in names
-                }
+                {name for names in first_ts._phases_dict.values() for name in names}
             )
             if phase_name not in known:
                 typer.echo(

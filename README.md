@@ -1,99 +1,55 @@
 # dhybridrpy
 
-![PyPI version](https://img.shields.io/pypi/v/dhybridrpy?label=PyPI&color=blue) [![Documentation Status](https://readthedocs.org/projects/dhybridrpy/badge/?version=latest)](https://dhybridrpy.readthedocs.io/en/latest/?badge=latest)
+![PyPI version](https://img.shields.io/pypi/v/dhybridrpy?label=PyPI&color=blue)
+[![Documentation Status](https://readthedocs.org/projects/dhybridrpy/badge/?version=latest)](https://dhybridrpy.readthedocs.io/en/latest/)
 
-`dhybridrpy` is an efficient Python package that allows you to easily load and plot data from `dHybridR` simulations. It provides programmatic access to simulation input and output data and the ability to quickly visualize that data.
+Read and plot dHybridR simulation output in Python: fields, phase diagrams,
+fluid moments, raw particles, and particle tracks.
 
-## Features
-
-- Efficiently access simulation input data and output data like timesteps, fields (e.g., magnetic field), phases (e.g., distribution functions), raw particle data, and particle tracks.
-- Quickly plot 1D, 2D, and 3D output data, including an interactive slice viewer for 3D volumes.
-- Read a quantity across many timesteps in one call, with files read by parallel worker processes.
-- Compute FFT power spectra and 1D spatial averages.
-- Follow individual particle trajectories across a simulation.
-- Lazily load large datasets using `dask`.
-- Perform arithmetic operations on data objects directly.
-- Batch-render fields and phases from the command line with the `dplot` tool.
-
-## Installation
-
-The latest package version can be installed via pip:
+Browse 3D slices, calculate spatial profiles and spectra, or process a run
+across timesteps. Dask support lets you defer large array reads.
 
 ```bash
 pip install dhybridrpy
 ```
 
-## Usage
+Requires Python 3.9 or later.
 
-Basic usage of the package:
+## Load and plot
 
 ```python
+import matplotlib.pyplot as plt
 from dhybridrpy import DHybridrpy
 
-# Enter your input file and output folder paths here
-input_file = "examples/data/inputs/input"
-output_folder = "examples/data/Output"
-
-dpy = DHybridrpy(input_file=input_file, output_folder=output_folder)
-
-# Print simulation timesteps
-print(dpy.timesteps())
-
-# Access an input variable
-print(f"Timestep = {dpy.inputs['time']['dt']}")
-
-# Access data at a specific timestep
-ts = 1
-Bx = dpy.timestep(ts).fields.Bx()
-print(Bx.data)
-
-# Plot data
-import matplotlib.pyplot as plt
-Bx.plot()
+dpy = DHybridrpy(input_file="run/input", output_folder="run/Output")
+ts = dpy.timestep_index(-1)
+print(ts.fields)
+ts.fields.Bx().plot()
 plt.show()
 ```
 
-Further examples can be found in the `examples` folder and in the [online documentation](https://dhybridrpy.readthedocs.io/en/latest/examples/).
+Use paths to your run; this example requires a total `Bx` output.
+The [quick start](https://dhybridrpy.readthedocs.io/en/latest/quickstart/)
+explains how to select an output and plot a field.
 
-## CLI Tool: dplot
-
-`dplot` is a command-line tool for visualizing dHybridR simulation fields and phases across all timesteps, saving PNG images and optionally creating MP4 videos. It is included when you install dhybridrpy.
-
-### Discover available data
+## Plot from the terminal
 
 ```bash
-dplot -i path/to/input
+# List available fields and phases.
+dplot -i run/input -o run/Output
+
+# Save Bx images for all available outputs.
+dplot -i run/input -o run/Output --fields Bx
 ```
 
-### Plot specific fields
-
-```bash
-dplot -i path/to/input --fields Bx --fields By
-```
-
-### Plot phase-space distributions
-
-```bash
-dplot -i path/to/input --phases p1x1 --species 3
-```
-
-### Plot all fields with video output
-
-```bash
-dplot -i path/to/input --all-fields --video
-```
-
-Key options: `--video`, `--fps`, `--colormap`, `--dpi`, `--vmin`/`--vmax`, `--type`, `--plots-dir`, `-j` (parallel processes), `-v` (verbose). Large datasets are automatically downsampled to 1080p. See the [dplot documentation](https://dhybridrpy.readthedocs.io/en/latest/user-guide/dplot/) for full details.
+Add `--video` to make an MP4 (requires FFmpeg). See the
+[dplot guide](https://dhybridrpy.readthedocs.io/en/latest/user-guide/dplot/)
+for phase plots, species selection, and rendering options.
 
 ## Documentation
 
-Full documentation is available at [dhybridrpy.readthedocs.io](https://dhybridrpy.readthedocs.io/en/latest/).
+- [Data access and selection](https://dhybridrpy.readthedocs.io/en/latest/user-guide/working-with-data/)
+- [Focused examples](https://dhybridrpy.readthedocs.io/en/latest/examples/)
+- [API reference](https://dhybridrpy.readthedocs.io/en/latest/api/dhybridrpy/)
 
-## License
-
-Project licensed under the GNU Affero General Public License v3.0. See the [LICENSE](LICENSE) file for details.
-
-## Authors
-
-- Bricker Ostler
-- Miha Cernetic
+By Bricker Ostler and Miha Cernetic. Licensed under [AGPL-3.0](LICENSE).

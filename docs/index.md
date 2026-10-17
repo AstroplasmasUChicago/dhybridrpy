@@ -1,68 +1,20 @@
 <div id="p5-banner"></div>
 
-<style>
-.md-content h1:first-child { display: none; }
-</style>
+# dhybridrpy
 
-![PyPI version](https://img.shields.io/pypi/v/dhybridrpy?label=PyPI&color=blue)
+Read and plot dHybridR simulation output in Python.
 
-**dhybridrpy** is a Python package that allows you to easily load and plot data from dHybridR simulations. It provides programmatic access to simulation input and output data with the ability to quickly visualize that data.
+To get started, see [Getting Started](installation.md).
 
-## Features
+## Examples and tools
 
-- **Easy Data Access**: Efficiently access simulation input data and output data like timesteps, fields (e.g., magnetic field), phases (e.g., distribution functions), and particle tracks.
-- **Quick Visualization**: Plot 1D, 2D, and 3D output data with a single method call.
-- **Spectral Analysis**: Compute isotropic and directional FFT power spectra, plus 1D spatial averages with statistics.
-- **Particle Tracks**: Follow individual particle trajectories, velocities, and local field values across a simulation.
-- **Lazy Loading**: Handle large datasets efficiently using [Dask](https://dask.org/) for lazy loading.
-- **Flexible API**: Perform arithmetic operations on data objects directly.
+- [Calculate spatial profiles, time histories, and spectra](examples.md).
+- [Follow particle trajectories](user-guide/particle-tracks.md).
+- [Save plots and videos from the terminal](user-guide/dplot.md).
 
-## Quick Example
+See the [API reference](api/dhybridrpy.md) for methods, arguments, and return values.
 
-```python
-from dhybridrpy import DHybridrpy
+[Report a problem](https://github.com/AstroplasmasUChicago/dhybridrpy/issues).
 
-# Initialize with your simulation paths
-dpy = DHybridrpy(
-    input_file="path/to/input",
-    output_folder="path/to/Output"
-)
-
-# Get available timesteps
-print(dpy.timesteps())
-
-# Access magnetic field data at timestep 1
-Bx = dpy.timestep(1).fields.Bx()
-print(Bx.data)
-
-# Plot the data
-import matplotlib.pyplot as plt
-Bx.plot()
-plt.show()
-```
-
-## Installation
-
-Install via pip:
-
-```bash
-pip install dhybridrpy
-```
-
-See the [Installation Guide](installation.md) for more details.
-
-## Getting Help
-
-- Browse the [Quick Start Guide](quickstart.md) for an introduction
-- Check the [API Reference](api/dhybridrpy.md) for detailed documentation
-- View [Examples](examples.md) for common use cases
-- Report issues on [GitHub](https://github.com/AstroplasmasUChicago/dhybridrpy/issues)
-
-## License
-
-This project is licensed under the GNU Affero General Public License v3.0. See the [LICENSE](https://github.com/AstroplasmasUChicago/dhybridrpy/blob/main/LICENSE) file for details.
-
-## Authors
-
-- Bricker Ostler
-- Miha Cernetic
+By Bricker Ostler and Miha Cernetic. Licensed under
+[AGPL-3.0](https://github.com/AstroplasmasUChicago/dhybridrpy/blob/main/LICENSE).

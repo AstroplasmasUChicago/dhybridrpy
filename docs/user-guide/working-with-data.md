@@ -1,360 +1,196 @@
-# Working with Data
+# Working with data
 
-This guide covers the data access patterns in dhybridrpy.
+Fields and species diagnostics provide arrays with coordinates for plotting
+and analysis. For individual particles, use [raw snapshots](#read-particle-snapshots)
+or [particle tracks](particle-tracks.md).
 
-## Data Hierarchy
+## Select an output
 
-The data in dhybridrpy is organized hierarchically:
-
-```
-DHybridrpy
-├── inputs (simulation parameters)
-└── timesteps
-    ├── fields (B, E, J components)
-    ├── phases (phase diagrams, fluid quantities)
-    └── raw_files (raw particle data)
-```
-
-## Accessing Timesteps
-
-### By Timestep Number
+Open a run and inspect the quantities saved at its last field or phase timestep:
 
 ```python
-# Access a specific timestep
-ts = dpy.timestep(1)
-ts = dpy.timestep(100)
+from dhybridrpy import DHybridrpy
+
+dpy = DHybridrpy("path/to/input", "path/to/Output")
+ts = dpy.timestep_index(-1)
+print(ts)
 ```
 
-### By Index
+The listing shows names, field types, and species. Available quantities can
+differ between timesteps; choose a name listed for the output you select.
+
+| Call | Selects |
+| --- | --- |
+| `dpy.timestep(32)` | Iteration 32 |
+| `dpy.timestep_index(0)` | First saved field or phase timestep |
+| `dpy.timestep_index(-1)` | Last saved field or phase timestep |
+| `dpy.timestep_closest(100)` | Saved field or phase timestep nearest iteration 100 |
+
+`dpy.timesteps()` lists field and phase iterations; `dpy.times()` gives their
+simulation times in the same order. These lists omit iteration zero by default.
+Include it with `DHybridrpy(..., exclude_timestep_zero=False)`.
+
+## Read a physical quantity
+
+`ts.fields` holds electromagnetic fields and electron-fluid quantities.
+`ts.phases` holds species charge density, bulk velocity, pressure, and
+phase-space distributions. Species methods default to `species=1`;
+`species="Total"` reads a saved total diagnostic rather than summing species.
+
+### Fields
 
 ```python
-# Access by index (supports negative indexing)
-ts_first = dpy.timestep_index(0)   # First timestep
-ts_last = dpy.timestep_index(-1)   # Last timestep
+Bx = ts.fields.Bx()
+Bx_external = ts.fields.Bx(type="External")
 ```
 
-### By Closest Match
+The default field type is `"Total"`. For magnetic and electric fields,
+`"External"` selects the imposed field and `"Self"` selects total minus external.
+
+| Quantity | Names |
+| --- | --- |
+| Magnetic field | `Bx`, `By`, `Bz`, `Bmagnitude` |
+| Electric field | `Ex`, `Ey`, `Ez`, `Emagnitude` |
+| Total electric current density | `Jx`, `Jy`, `Jz`, `Jmagnitude` |
+| Electron pressure and temperature | `Pe`, `Te` |
+| Turbulence-driving acceleration | `Accelx`, `Accely`, `Accelz`, `Accelmagnitude` |
+
+Acceleration requires `type="External"`. Magnitude methods read saved files;
+calculate an unsaved magnitude with [arithmetic](#calculate-derived-quantities).
+
+### Charge density
 
 ```python
-# Access the closest available timestep to a target
-ts = dpy.timestep_closest(100, verbose=True)
-# INFO: Requested timestep: 100. Closest available timestep: 96.
+density = ts.phases.x3x2x1(species=1)
 ```
 
-### Get All Timesteps
+`x3x2x1` is the species' signed charge density on the simulation grid.
+The name is the same in 1D, 2D, and 3D runs.
+
+`x2x1` gives an xy charge-density map, averaged over z in a 3D run.
+It uses absolute charge weights. `x3x1` and `x3x2` give the xz and yz maps.
+
+### Bulk velocity and pressure
 
 ```python
-# Returns a numpy array of available timesteps
-all_ts = dpy.timesteps()
-print(all_ts)  # e.g., array([1, 2, 3, 4, 5])
+velocity = ts.phases.Vx(species=1)
+pressure = ts.phases.Pmagnitude(species=1)
 ```
 
-### Get Simulation Times
+| Quantity | Names |
+| --- | --- |
+| Bulk velocity components and magnitude | `Vx`, `Vy`, `Vz`, `Vmagnitude` |
+| Pressure tensor components | `Pxx`, `Pyy`, `Pzz`, `Pxy`, `Pyz`, `Pzx` |
+| Scalar pressure, `(Pxx + Pyy + Pzz) / 3` | `Pmagnitude` |
 
-`times()` returns the simulation time of each field/phase timestep, in
-the same order as `timesteps()`:
+### Velocity and energy distributions
+
+These diagnostics show how particles are distributed in position and proper
+velocity (`u = γv`) or kinetic energy:
+
+| Name | Horizontal axis | Vertical axis |
+| --- | --- | --- |
+| `u1x1` | x position | x proper velocity |
+| `u2u1` | x proper velocity | y proper velocity |
+| `utx1` | x position | Proper speed |
+| `etx1` | x position | Natural logarithm of kinetic energy |
 
 ```python
-all_times = dpy.times()
+f = ts.phases.u1x1(species=1)
 ```
 
-### Raw Data Timesteps
+The vertical axis comes first in the name. These distributions use absolute
+particle charge as the weight and average over spatial coordinates not shown.
 
-Raw particle data may be dumped at different intervals than fields and
-phases, so it has its own timestep and time arrays:
+Older output, including the sample data, uses names such as `p1x1` and `p2p1`.
+Use the names printed by `ts.phases`; dhybridrpy preserves the saved names.
+
+## Work with arrays
+
+The fields and species diagnostics above share the same array, coordinate,
+cropping, and arithmetic interface.
+
+### Read values and coordinates
 
 ```python
-raw_ts = dpy.raw_timesteps()
-raw_times = dpy.raw_times()
+values = Bx.data
+x = Bx.xdata
 ```
 
-## Field Data
+By default, `.data` reads a NumPy array. Save it in a variable to avoid reading
+the file again. With `lazy=True`, it returns a [Dask array](lazy-loading.md).
 
-Fields represent electromagnetic quantities on the simulation grid.
+Spatial arrays have shape `(nx, ny)` in 2D and `(nx, ny, nz)` in 3D.
+`xdata`, `ydata`, and `zdata` contain sample centers; `xlimdata`, `ylimdata`,
+and `zlimdata` give axis edges. For distributions, coordinates follow the
+displayed axes: `f.ydata` above contains proper-velocity bin centers.
 
-### Available Fields
+### Crop a region
 
-| Field | Components | Description |
-|-------|------------|-------------|
-| Magnetic (B) | `Bx`, `By`, `Bz`, `Bmagnitude` | Magnetic field |
-| Electric (E) | `Ex`, `Ey`, `Ez`, `Emagnitude` | Electric field |
-| Current (J) | `Jx`, `Jy`, `Jz`, `Jmagnitude` | Current density |
-| External acceleration (Accel) | `Accelx`, `Accely`, `Accelz`, `Accelmagnitude` | External force/driving acceleration field (only available with `type="External"`) |
-
-### Accessing Fields
+Use array indexing for individual values or slices. Use `crop()` to keep the
+coordinates and plotting methods while selecting fractions of each axis:
 
 ```python
-# Get field components
-Bx = dpy.timestep(1).fields.Bx()
-By = dpy.timestep(1).fields.By()
-Bz = dpy.timestep(1).fields.Bz()
-
-# Get field magnitude
-B_mag = dpy.timestep(1).fields.Bmagnitude()
+center = Bx.crop(x_range=(0.25, 0.75))  # Middle half of the x extent
 ```
 
-### Field Types
+### Calculate derived quantities
 
-Fields can be decomposed into:
-
-- **Total** (default): Complete field
-- **External**: Externally applied field
-- **Self**: Self-consistent field from particle motion
-
-```python
-# Access different field types
-Bx_total = dpy.timestep(1).fields.Bx()  # Default is Total
-Bx_total = dpy.timestep(1).fields.Bx(type="Total")
-Bx_ext = dpy.timestep(1).fields.Bx(type="External")
-Bx_self = dpy.timestep(1).fields.Bx(type="Self")
-```
-
-!!! note
-    The external acceleration field (`Accel`) is only ever written as an
-    **External** field, so it must be requested with `type="External"`:
-
-    ```python
-    Accelx = dpy.timestep(1).fields.Accelx(type="External")
-    ```
-
-    Requesting it without `type="External"` (the default is `Total`) raises an
-    error, since no `Total` or `Self` acceleration field exists.
-
-## Phase Data
-
-Phase data includes phase diagrams and fluid quantities. Phase diagrams
-are charge density deposited on a 2D grid: each particle contributes the
-absolute value of its charge, so signs never cancel, and purely spatial
-diagrams such as `x2x1` and `x3x2x1` are the charge density of the
-species. For singly charged ions the values are numerically the particle
-number density. The axis codes in a diagram name are:
-
-| Code | Axis |
-|------|------|
-| `x1`, `x2`, `x3` | Position (x, y, z) |
-| `p1`, `p2`, `p3` | Proper velocity component (gamma times velocity), unlike the `v` datasets in raw and track files, which are regular velocity |
-| `pt` | Magnitude of the proper velocity |
-| `et` | Kinetic energy on a natural log axis, so `etx1` is charge per log energy along x |
-
-### Accessing Phase Data
-
-```python
-# Charge density in x-y space
-f_xy = dpy.timestep(1).phases.x2x1()
-
-# Charge density in proper velocity space
-f_p2p1 = dpy.timestep(1).phases.p2p1()
-
-# Charge per log energy along x
-f_etx = dpy.timestep(1).phases.etx1()
-```
-
-### Species Selection
-
-Phase data is species-specific:
-
-```python
-# Default: species 1
-phase_s1 = dpy.timestep(1).phases.x2x1()
-phase_s1 = dpy.timestep(1).phases.x2x1(species=1)
-
-# Species 2
-phase_s2 = dpy.timestep(1).phases.x2x1(species=2)
-
-# Total (all species)
-phase_total = dpy.timestep(1).phases.x2x1(species="Total")
-```
-
-### Fluid Quantities
-
-```python
-# Bulk velocity components
-Vx = dpy.timestep(1).phases.Vx(species=1)
-Vy = dpy.timestep(1).phases.Vy(species=1)
-Vz = dpy.timestep(1).phases.Vz(species=1)
-
-# Pressure tensor components
-Pxx = dpy.timestep(1).phases.Pxx(species=1)
-Pxy = dpy.timestep(1).phases.Pxy(species=1)
-
-# Scalar pressure
-P = dpy.timestep(1).phases.P(species=1)
-```
-
-## Reading Across Timesteps
-
-A common task is following one quantity through the whole run. Looping
-over timesteps works, but it reads the files one at a time:
-
-```python
-# Works, but slow: one file at a time
-max_Bx = []
-for ts in dpy.timesteps():
-    max_Bx.append(dpy.timestep(ts).fields.Bx().data.max())
-```
-
-Prefer `field_timeseries` and `phase_timeseries`, which read the files
-in parallel worker processes:
+Arithmetic also preserves coordinates and plotting methods:
 
 ```python
 import numpy as np
 
-# Reduce each timestep inside the workers; only the results come back
-max_Bx = dpy.field_timeseries("Bx", apply=np.max)
-
-# Phase counterpart, per species
-mean_Vx = dpy.phase_timeseries("Vx", species=1, apply=np.mean)
+By = ts.fields.By()
+B_xy = np.sqrt(Bx**2 + By**2)
 ```
 
-Without `apply`, the full selection is returned as one array of shape
-`(num_timesteps, *grid)` and held in memory, so pass a `timesteps`
-subset for very large runs:
+Scalar arithmetic (`2 * Bx`) and comparisons (`Bx > 0`) work too. Combine
+objects from the same grid, timestep, and field type or species. See the
+[arithmetic reference](../api/data.md#arithmetic-and-comparisons) for
+compatibility checks and boolean results.
 
-```python
-Bx_recent = dpy.field_timeseries("Bx", timesteps=dpy.timesteps()[-20:])
-```
+## Read across timesteps
 
-The `apply` function runs inside the workers, so only its results
-travel back. This scales to runs whose full data would not fit in
-memory. It must be a module-level function (such as `np.mean`), not a
-lambda. `name` may also be a list of names, in which case `apply`
-receives one array per name:
-
-```python
-def mean_bperp(bx, by):
-    return np.sqrt(bx**2 + by**2).mean()
-
-bperp = dpy.field_timeseries(["Bx", "By"], apply=mean_bperp)
-```
-
-Other arguments: `type` selects the field type (`field_timeseries`),
-`species` selects the species (`phase_timeseries`), and `workers` sets
-the pool size.
-
-!!! note
-    The workers are spawned processes. In a script, calls to these
-    methods must run under an `if __name__ == "__main__":` guard.
-    Notebooks and interactive sessions need no guard.
-
-## Raw Particle Data
-
-Raw files contain particle-level data:
-
-```python
-# Access raw data for species 1
-raw = dpy.timestep(1).raw_files.raw(species=1)
-
-# List available datasets without reading any data
-print(raw.keys())  # e.g., ['q', 'tag', 'v1', 'v2', 'v3', 'x1', 'x2', 'x3']
-
-# Check for a dataset
-if 'v1' in raw:
-    print("velocities available")
-```
-
-### Reading Selected Datasets
-
-Index the raw object to read a single dataset, or use `load()` to read
-several at once with the worker pool:
-
-```python
-# Read one dataset
-x = raw['x1']
-
-# Read several datasets in parallel worker processes
-data = raw.load(['x1', 'x2', 'v1'])
-print(data['v1'])
-
-# Read everything in parallel
-data = raw.load()
-```
-
-### Reading Everything
-
-`raw.dict` reads the whole file into a dictionary in one pass:
-
-```python
-data_dict = raw.dict
-print(data_dict.keys())  # Available quantities
-```
-
-Prefer `keys()`, indexing, or `load()` when you only need some of the
-datasets, since `dict` reads them all.
-
-## Data Properties
-
-All data objects (Field, Phase) share common properties:
-
-```python
-Bx = dpy.timestep(1).fields.Bx()
-
-# Core data array
-Bx.data        # The actual numpy/dask array
-Bx.data.shape  # Array dimensions
-
-# Coordinate arrays
-Bx.xdata       # X coordinates
-Bx.ydata       # Y coordinates (2D/3D)
-Bx.zdata       # Z coordinates (3D)
-
-# Coordinate limits
-Bx.xlimdata    # [xmin, xmax]
-Bx.ylimdata    # [ymin, ymax]
-Bx.zlimdata    # [zmin, zmax]
-
-# Metadata
-Bx.name        # e.g., "Bx"
-Bx.timestep    # Timestep number
-Bx.time        # Simulation time
-Bx.file_path   # Path to HDF5 file
-```
-
-## Arithmetic Operations
-
-Data objects support arithmetic operations:
+Use `field_timeseries()` or `phase_timeseries()` to read a quantity across
+saved iterations. Pass `apply=np.mean` to return one mean per timestep:
 
 ```python
 import numpy as np
+from dhybridrpy import DHybridrpy
 
-Bx = dpy.timestep(1).fields.Bx()
-By = dpy.timestep(1).fields.By()
-
-# Basic operations
-B_sum = Bx + By
-B_diff = Bx - By
-B_scaled = Bx * 2.0
-B_ratio = Bx / By
-B_squared = Bx ** 2
-
-# NumPy ufuncs work directly
-B_abs = np.abs(Bx)
-B_sin = np.sin(Bx)
-B_mag = np.sqrt(Bx**2 + By**2)
+if __name__ == "__main__":
+    dpy = DHybridrpy("path/to/input", "path/to/Output")
+    mean_Bx = dpy.field_timeseries("Bx", apply=np.mean)
 ```
 
-!!! note
-    Arithmetic operations require compatible data: same shape, same timestep, and (for Fields) same type.
+The result is a list in timestep order. Pass `timesteps=[32, 64]` to select
+iterations, each of which must contain the quantity. Without `apply`, the
+method returns full arrays stacked along a new time axis. Pass a list of
+quantity names with `apply` to combine several arrays at each timestep.
 
-## Inspecting Available Data
+These reads use worker processes, so scripts need the main guard shown
+above. `apply` must be importable by those workers. See the
+[time-series reference](../api/dhybridrpy.md#read-across-timesteps) for custom
+functions and memory requirements, or [plot and export a field history](../examples/time-history.md).
+
+## Read particle snapshots
+
+Raw output stores individual particle data at a saved time. Its output interval
+can differ from fields and phases, so select an iteration with `raw_timesteps()`:
 
 ```python
-ts = dpy.timestep(1)
-
-# Print available fields
-print(ts.fields)
-# Output:
-# Fields at timestep 1:
-#   type = Total: Bx, By, Bz, Ex, Ey, Ez, Jx, Jy, Jz
-#   type = External: Bx, By, Bz
-#   type = Self: Bx, By, Bz
-
-# Print available phases
-print(ts.phases)
-# Output:
-# Phases at timestep 1:
-#   species = 1: x2x1, p1x1, Vx, Vy, Vz, ...
-#   species = 2: x2x1, p1x1, Vx, Vy, Vz, ...
-
-# Print available raw files
-print(ts.raw_files)
+raw = dpy.timestep(dpy.raw_timesteps()[0]).raw_files.raw(species=1)
+print(raw.keys())  # Dataset names; no array data is read
+x = raw["x1"]
+vx = raw["v1"]
 ```
+
+`x1`, `x2`, and `x3` are positions; `v1`, `v2`, and `v3` are ordinary
+velocity components. `q` is the signed macroparticle charge weight.
+Use `"tag" in raw` to check whether a dataset exists.
+
+For bulk reads, `raw.dict` reads all datasets and `raw.load()` reads them
+in worker processes. See the [Raw reference](../api/data.md#raw) for selecting
+datasets and using workers, or [lazy loading](lazy-loading.md#raw-particle-data)
+to defer reads. For trajectories across time, use [particle tracks](particle-tracks.md).
