@@ -1,7 +1,7 @@
 # dhybridrpy
 
 ![PyPI version](https://img.shields.io/pypi/v/dhybridrpy?label=PyPI&color=blue)
-[![Documentation Status](https://readthedocs.org/projects/dhybridrpy/badge/?version=latest)](https://dhybridrpy.readthedocs.io/en/latest/)
+[![Documentation Status](https://img.shields.io/readthedocs/dhybridrpy/latest)](https://dhybridrpy.readthedocs.io/en/latest/)
 
 Read and plot dHybridR simulation output in Python: fields, phase diagrams,
 fluid moments, raw particles, and particle tracks.
